@@ -3,13 +3,9 @@ import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getSnapshot } from "@/lib/manutd.functions";
 import { StatusBlock } from "@/components/united/StatusBlock";
-import {
-  NewsSection,
-  NextMatchSection,
-  ScheduleSection,
-  StatsSection,
-  TableSection,
-} from "@/components/united/Sections";
+import { NextMatchSection, ScheduleSection, TableSection } from "@/components/united/Sections";
+import { NewsSection } from "@/components/united/NewsSection";
+import { GreetingCard } from "@/components/united/GreetingCard";
 
 const snapshotQuery = queryOptions({
   queryKey: ["united-snapshot"],
@@ -59,7 +55,6 @@ const NAV = [
   { href: "#status", label: "Во живо" },
   { href: "#schedule", label: "Распоред" },
   { href: "#table", label: "Табела" },
-  { href: "#stats", label: "Статистики" },
   { href: "#news", label: "Вести" },
 ];
 
@@ -108,11 +103,11 @@ function Home() {
         </ul>
       </nav>
 
+      <GreetingCard />
       <StatusBlock snapshot={snapshot} />
       <NextMatchSection snapshot={snapshot} />
       <ScheduleSection snapshot={snapshot} />
       <TableSection snapshot={snapshot} />
-      <StatsSection snapshot={snapshot} />
       <NewsSection snapshot={snapshot} />
 
       <div className="px-4 py-8 sm:px-6">

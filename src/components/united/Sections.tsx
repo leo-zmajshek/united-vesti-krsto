@@ -1,5 +1,5 @@
 import type { SnapshotDTO } from "@/lib/manutd.types";
-import { Badge, Card, Section, SectionHeading, SerbianFlagTag } from "./ui";
+import { Badge, Card, Section, SectionHeading } from "./ui";
 import { OUTCOME_SHORT, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
 
 const FORM_CLASS = {
