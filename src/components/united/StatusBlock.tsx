@@ -247,7 +247,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
   return (
     <div id="status" className="scroll-mt-32 px-4 py-6 sm:px-6">
       <Card>
-        <p className="text-center text-2xl font-bold">Моментално нема податоци за натпревар.</p>
+        <p className="text-center text-2xl font-bold">Податоците за натпреварите моментално не се достапни.</p>
         <p className="mt-2 text-center text-xl text-muted-foreground">
           Пробајте повторно за неколку минути или{" "}
           <Link to="/chat" className="font-bold text-primary underline">

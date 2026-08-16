@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSnapshotData, answerQuestion, expandNewsArticle } from "./manutd.server";
 
 export const getSnapshot = createServerFn({ method: "GET" }).handler(async () => {
-  return getSnapshotData();
+  return getSnapshotData(process.env["FOOTBALL_DATA_API_KEY"]);
 });
 
 export const askUnited = createServerFn({ method: "POST" })
@@ -18,7 +18,7 @@ export const askUnited = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     try {
-      const answer = await answerQuestion(data.question, data.history);
+      const answer = await answerQuestion(data.question, data.history, undefined, process.env["FOOTBALL_DATA_API_KEY"]);
       return { answer, error: null as string | null };
     } catch (err) {
       console.error("[manutd] ask failed", err);
@@ -80,6 +80,7 @@ export const askAboutNews = createServerFn({ method: "POST" })
         data.question,
         data.history,
         `Корисникот чита вест со наслов „${data.title}“. Текст на веста:\n${data.article}\nОдговарај првенствено за оваа вест.`,
+        process.env["FOOTBALL_DATA_API_KEY"],
       );
       return { answer, error: null as string | null };
     } catch (err) {

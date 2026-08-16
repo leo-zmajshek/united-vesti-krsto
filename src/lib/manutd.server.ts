@@ -8,6 +8,7 @@ const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 const ESPN_TEAM_ID = "360";
 
 import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
+import { loadFootballDataMatches, loadFootballDataTable } from "./football-data.server";
 import type {
   MatchDTO,
   LiveDTO,
@@ -36,7 +37,10 @@ async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Pr
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(8_000),
+  });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return (await res.json()) as T;
 }
@@ -454,21 +458,39 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 
 /* ---------- Snapshot ---------- */
 
-export async function getSnapshotData(): Promise<SnapshotDTO> {
-  const [espn, fallbackLive, fallbackResults, fallbackFixtures, table, news] = await Promise.all([
+let lastSuccessfulSnapshot: SnapshotDTO | null = null;
+
+export async function getSnapshotData(footballDataApiKey?: string): Promise<SnapshotDTO> {
+  const authenticatedMatches = footballDataApiKey
+    ? cached("football-data-matches", 5 * 60_000, () => loadFootballDataMatches(footballDataApiKey)).catch((error) => {
+        console.error("[manutd] authenticated match provider failed", error);
+        return { live: null, results: [], fixtures: [] };
+      })
+    : Promise.resolve({ live: null, results: [], fixtures: [] });
+  const authenticatedTable = footballDataApiKey
+    ? cached("football-data-table", 30 * 60_000, () => loadFootballDataTable(footballDataApiKey)).catch((error) => {
+        console.error("[manutd] authenticated table provider failed", error);
+        return [] as TableRowDTO[];
+      })
+    : Promise.resolve([] as TableRowDTO[]);
+
+  const [primary, espn, fallbackLive, fallbackResults, fallbackFixtures, primaryTable, fallbackTable, news] = await Promise.all([
+    authenticatedMatches,
     cached("espn-schedule", 2 * 60_000, loadEspnSchedule).catch(() => ({ live: null, results: [], fixtures: [] })),
     cached("live", 2 * 60_000, loadLive).catch(() => null),
     cached("results", 15 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
     cached("fixtures", 15 * 60_000, loadFixtures).catch(() => [] as MatchDTO[]),
+    authenticatedTable,
     cached("espn-table", 30 * 60_000, loadEspnTable)
       .catch(() => cached("table", 30 * 60_000, loadTable))
       .catch(() => [] as TableRowDTO[]),
     cached("news", 30 * 60_000, loadNews).catch(() => [] as NewsItemDTO[]),
   ]);
 
-  const live = espn.live ?? fallbackLive;
-  const results = espn.results.length > 0 ? espn.results : fallbackResults;
-  const fixtures = espn.fixtures.length > 0 ? espn.fixtures : fallbackFixtures;
+  const live = primary.live ?? espn.live ?? fallbackLive;
+  const results = primary.results.length > 0 ? primary.results : espn.results.length > 0 ? espn.results : fallbackResults;
+  const fixtures = primary.fixtures.length > 0 ? primary.fixtures : espn.fixtures.length > 0 ? espn.fixtures : fallbackFixtures;
+  const table = primaryTable.length > 0 ? primaryTable : fallbackTable;
 
   const sortedResults = [...results].sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
@@ -484,7 +506,12 @@ export async function getSnapshotData(): Promise<SnapshotDTO> {
     () => addMatchDetails(live ?? last),
   ).catch(() => live ?? last);
 
-  return {
+  const hasCoreData = Boolean(live || last || sortedFixtures[0] || table.length > 0);
+  if (!hasCoreData && lastSuccessfulSnapshot) {
+    return { ...lastSuccessfulSnapshot, availability: "stale" };
+  }
+
+  const snapshot: SnapshotDTO = {
     live: live ? (detailedMatch as LiveDTO) : null,
     last: live ? last : (detailedMatch as MatchDTO | null),
     next: sortedFixtures[0] ?? null,
@@ -498,7 +525,10 @@ export async function getSnapshotData(): Promise<SnapshotDTO> {
       .filter((o): o is "win" | "draw" | "loss" => o != null),
     news,
     updatedAt: new Date().toISOString(),
+    availability: hasCoreData ? "fresh" : "unavailable",
   };
+  if (hasCoreData) lastSuccessfulSnapshot = snapshot;
+  return snapshot;
 }
 
 const SEARCH_TOOLS = [
@@ -559,10 +589,11 @@ export async function answerQuestion(
   question: string,
   history: { role: string; content: string }[],
   extraContext?: string,
+  footballDataApiKey?: string,
 ) {
   let context = "";
   try {
-    const snap = await getSnapshotData();
+    const snap = await getSnapshotData(footballDataApiKey);
     context = JSON.stringify({
       live: snap.live,
       last: snap.last,

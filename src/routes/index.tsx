@@ -11,7 +11,8 @@ import { HelpCard } from "@/components/united/HelpCard";
 const snapshotQuery = queryOptions({
   queryKey: ["united-snapshot"],
   queryFn: () => getSnapshot(),
-  staleTime: 20_000,
+  staleTime: 5 * 60_000,
+  refetchOnMount: false,
 });
 
 export const Route = createFileRoute("/")({
@@ -63,7 +64,7 @@ function Home() {
   const { data: snapshot, refetch } = useSuspenseQuery(snapshotQuery);
 
   useEffect(() => {
-    const interval = snapshot.live ? 30_000 : 180_000;
+    const interval = snapshot.live ? 30_000 : 5 * 60_000;
     const id = setInterval(() => void refetch(), interval);
     return () => clearInterval(id);
   }, [snapshot.live, refetch]);
@@ -106,6 +107,11 @@ function Home() {
       </nav>
 
       <GreetingCard />
+      {snapshot.availability === "stale" ? (
+        <p className="mx-4 mt-5 rounded-lg border-2 border-warning bg-warning/15 px-4 py-3 text-center text-lg font-bold sm:mx-6">
+          Прикажани се последните зачувани податоци. Новите податоци моментално се недостапни.
+        </p>
+      ) : null}
       <StatusBlock snapshot={snapshot} />
       <NextMatchSection snapshot={snapshot} />
       <ScheduleSection snapshot={snapshot} />
