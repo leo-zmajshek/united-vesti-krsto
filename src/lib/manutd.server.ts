@@ -328,7 +328,11 @@ async function runSearchTool(name: string, query: string) {
   }
 }
 
-export async function answerQuestion(question: string, history: { role: string; content: string }[]) {
+export async function answerQuestion(
+  question: string,
+  history: { role: string; content: string }[],
+  extraContext?: string,
+) {
   let context = "";
   try {
     const snap = await getSnapshotData();
