@@ -5,57 +5,15 @@ const TEAM_NAMES = ["manchester united", "man united", "man utd"];
 const PL_LEAGUE = "4328";
 const SDB = "https://www.thesportsdb.com/api/v1/json/3";
 
-export type MatchDTO = {
-  id: string;
-  home: string;
-  away: string;
-  homeBadge: string | null;
-  awayBadge: string | null;
-  homeScore: number | null;
-  awayScore: number | null;
-  league: string;
-  timestamp: string | null;
-  isHome: boolean;
-  opponent: string;
-  opponentBadge: string | null;
-  outcome: "win" | "draw" | "loss" | null;
-};
+import type {
+  MatchDTO,
+  LiveDTO,
+  TableRowDTO,
+  NewsItemDTO,
+  SnapshotDTO,
+} from "./manutd.types";
 
-export type LiveDTO = MatchDTO & { progress: string; status: string };
-
-export type TableRowDTO = {
-  rank: number;
-  team: string;
-  badge: string | null;
-  played: number;
-  win: number;
-  draw: number;
-  loss: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  points: number;
-  isUnited: boolean;
-};
-
-export type NewsItemDTO = {
-  title: string;
-  summary: string;
-  source: string;
-  link: string;
-  serbianOnly: boolean;
-};
-
-export type SnapshotDTO = {
-  live: LiveDTO | null;
-  last: MatchDTO | null;
-  next: MatchDTO | null;
-  fixtures: MatchDTO[];
-  results: MatchDTO[];
-  table: TableRowDTO[];
-  form: ("win" | "draw" | "loss")[];
-  news: NewsItemDTO[];
-  updatedAt: string;
-};
+export type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO };
 
 type CacheEntry = { value: unknown; expires: number };
 const cache = new Map<string, CacheEntry>();

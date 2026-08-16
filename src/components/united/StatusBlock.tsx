@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { SnapshotDTO } from "@/lib/manutd.server";
+import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card } from "./ui";
 import { OUTCOME_LABEL, countdown, formatDateTime, formatTime, hoursUntil, isToday } from "@/lib/mk";
 

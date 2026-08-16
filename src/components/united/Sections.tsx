@@ -1,4 +1,4 @@
-import type { SnapshotDTO } from "@/lib/manutd.server";
+import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card, Section, SectionHeading, SerbianFlagTag } from "./ui";
 import { OUTCOME_SHORT, formatDateTime } from "@/lib/mk";
 
