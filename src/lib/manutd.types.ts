@@ -69,5 +69,6 @@ export type SnapshotDTO = {
   form: ("win" | "draw" | "loss")[];
   news: NewsItemDTO[];
   updatedAt: string;
+  availability: "fresh" | "stale" | "unavailable";
 };
 
