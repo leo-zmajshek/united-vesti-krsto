@@ -31,8 +31,15 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
     setError(null);
     try {
       const res = await expand({
-        data: { title: item.title, summary: item.summary, source: item.source, link: item.link },
+        data: {
+          title: item.title,
+          summary: item.summary,
+          source: item.source,
+          link: item.link,
+          published: item.published,
+        },
       });
+
       if (res.error) setError(res.error);
       else setArticle(res.article);
     } catch {
@@ -80,8 +87,13 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
           {item.summary}
         </p>
       ) : null}
-      {item.source ? <p className="mt-2 text-lg text-muted-foreground">Извор: {item.source}</p> : null}
+      {item.source || item.published ? (
+        <p className="mt-2 text-lg text-muted-foreground">
+          {[item.source ? `Извор: ${item.source}` : "", item.published].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
       {item.serbianOnly ? <SerbianFlagTag /> : null}
+
 
       <button
         type="button"

@@ -33,12 +33,14 @@ export const askUnited = createServerFn({ method: "POST" })
   });
 
 export const expandNews = createServerFn({ method: "POST" })
-  .inputValidator((input: { title: string; summary: string; source: string; link: string }) => ({
+  .inputValidator((input: { title: string; summary: string; source: string; link: string; published?: string }) => ({
     title: String(input?.title ?? "").slice(0, 300),
     summary: String(input?.summary ?? "").slice(0, 600),
     source: String(input?.source ?? "").slice(0, 120),
     link: String(input?.link ?? "").slice(0, 500),
+    published: String(input?.published ?? "").slice(0, 60),
   }))
+
   .handler(async ({ data }) => {
     try {
       const article = await expandNewsArticle(data);
