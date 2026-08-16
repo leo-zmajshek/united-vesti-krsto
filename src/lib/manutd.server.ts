@@ -162,7 +162,15 @@ async function loadRawNews(): Promise<RawNews[]> {
   });
 }
 
-async function callAi(messages: { role: string; content: string }[], maxTokens = 1200) {
+type AiMessage = {
+  role: string;
+  content: string | null;
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+  name?: string;
+};
+
+async function callAiRaw(messages: AiMessage[], maxTokens: number, tools?: unknown[]) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("Missing LOVABLE_API_KEY");
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -175,6 +183,7 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
       model: "google/gemini-2.5-flash",
       messages,
       max_tokens: maxTokens,
+      ...(tools ? { tools } : {}),
     }),
   });
   if (!res.ok) {
@@ -182,9 +191,15 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
     console.error("[manutd] AI error", res.status, text);
     throw new Error(res.status === 429 ? "rate_limited" : "ai_failed");
   }
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json = (await res.json()) as { choices?: { message?: AiMessage }[] };
+  return json.choices?.[0]?.message ?? { role: "assistant", content: "" };
 }
+
+async function callAi(messages: { role: string; content: string }[], maxTokens = 1200) {
+  const msg = await callAiRaw(messages as AiMessage[], maxTokens);
+  return msg.content ?? "";
+}
+
 
 async function loadNews(): Promise<NewsItemDTO[]> {
   const raw = await loadRawNews();
