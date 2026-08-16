@@ -38,17 +38,24 @@ async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Pr
   }
 }
 
+/* ESPN rejects browser-like clients from datacenter IPs; a plain non-browser
+   agent gets through, so try a few agents before falling back to a text proxy. */
+const ESPN_AGENTS = ["curl/8.7.1", "okhttp/4.12.0", "ESPN/1.0 (+https://espn.com)"];
+
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!res.ok) {
-    // ESPN blocks datacenter IPs (403 from the published worker); retry read-only through a text proxy.
-    if (url.includes("espn.com")) return getJsonViaProxy<T>(url);
-    throw new Error(`Request failed: ${res.status}`);
+  const isEspn = url.includes("espn.com");
+  const agents = isEspn ? ESPN_AGENTS : [null];
+  let lastStatus = 0;
+  for (const agent of agents) {
+    const res = await fetch(url, {
+      headers: { accept: "application/json", ...(agent ? { "user-agent": agent } : {}) },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (res.ok) return (await res.json()) as T;
+    lastStatus = res.status;
   }
-  return (await res.json()) as T;
+  if (isEspn) return getJsonViaProxy<T>(url);
+  throw new Error(`Request failed: ${lastStatus}`);
 }
 
 async function getJsonViaProxy<T>(url: string): Promise<T> {
@@ -59,6 +66,7 @@ async function getJsonViaProxy<T>(url: string): Promise<T> {
   if (!res.ok) throw new Error(`Proxy request failed: ${res.status}`);
   return JSON.parse(await res.text()) as T;
 }
+
 
 
 function isUnited(name: string | null | undefined) {
