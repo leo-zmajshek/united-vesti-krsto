@@ -71,8 +71,9 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 <span className="font-bold text-foreground">{i + 1}*</span>{" "}
                 {m.isHome ? "Дома против " : "Во гости кај "}
                 {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
-                {OUTCOME_WORD[m.outcome!]})
+                {OUTCOME_WORD[m.outcome!]}){m.league ? ` · ${leagueMk(m.league)}` : ""}
               </li>
+
             ))}
           </ul>
           <p className="mt-2 text-base text-muted-foreground sm:text-lg">П = победа, Н = нерешено, И = изгубено</p>
