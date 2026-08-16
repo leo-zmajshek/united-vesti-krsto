@@ -265,9 +265,12 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
       summary: t?.summary || "",
       source: n.source,
       link: n.link,
+      published: mkAgo(n.date),
+      publishedAt: n.date ? n.date.toISOString() : "",
       serbianOnly: !translated,
     };
   });
+
 }
 
 /* ---------- Snapshot ---------- */
