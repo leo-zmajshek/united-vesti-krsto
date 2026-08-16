@@ -9,6 +9,8 @@ const ESPN_TEAM_ID = "360";
 
 import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
 import { loadFootballDataMatches, loadFootballDataTable } from "./football-data.server";
+import { mergeMatches } from "./espn-feed";
+
 import type {
   MatchDTO,
   LiveDTO,
@@ -41,9 +43,23 @@ async function getJson<T>(url: string): Promise<T> {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  if (!res.ok) {
+    // ESPN blocks datacenter IPs (403 from the published worker); retry read-only through a text proxy.
+    if (url.includes("espn.com")) return getJsonViaProxy<T>(url);
+    throw new Error(`Request failed: ${res.status}`);
+  }
   return (await res.json()) as T;
 }
+
+async function getJsonViaProxy<T>(url: string): Promise<T> {
+  const res = await fetch(`https://r.jina.ai/${url}`, {
+    headers: { accept: "application/json", "x-respond-with": "text" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Proxy request failed: ${res.status}`);
+  return JSON.parse(await res.text()) as T;
+}
+
 
 function isUnited(name: string | null | undefined) {
   const n = (name ?? "").toLowerCase();
@@ -460,47 +476,8 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 
 /* ---------- Snapshot ---------- */
 
-function matchKey(match: MatchDTO): string {
-  const day = match.timestamp ? new Date(match.timestamp).toISOString().slice(0, 10) : "unknown";
-  const opponent = match.opponent.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  return `${day}|${opponent}`;
-}
+/* matchKey / matchScore / mergeMatches live in ./espn-feed (shared with the browser top-up). */
 
-function matchScore(match: MatchDTO): number {
-  let score = 0;
-  if (match.homeScore !== null && match.awayScore !== null) score += 4;
-  if (/^\d+$/.test(match.id)) score += 2; // ESPN-style numeric event id (details lookup)
-  if (match.league) score += 1;
-  if (match.opponentBadge) score += 1;
-  if (match.timestamp) score += 1;
-  return score;
-}
-
-/** Merge match lists from all providers so every competition shows up, not just one provider's. */
-function mergeMatches(lists: MatchDTO[][]): MatchDTO[] {
-  const byKey = new Map<string, MatchDTO>();
-  for (const list of lists) {
-    for (const match of list) {
-      const key = matchKey(match);
-      const existing = byKey.get(key);
-      if (!existing) {
-        byKey.set(key, match);
-        continue;
-      }
-      const winner = matchScore(match) > matchScore(existing) ? match : existing;
-      const other = winner === match ? existing : match;
-      byKey.set(key, {
-        ...winner,
-        league: winner.league || other.league,
-        opponentBadge: winner.opponentBadge ?? other.opponentBadge,
-        homeBadge: winner.homeBadge ?? other.homeBadge,
-        awayBadge: winner.awayBadge ?? other.awayBadge,
-        timestamp: winner.timestamp ?? other.timestamp,
-      });
-    }
-  }
-  return [...byKey.values()];
-}
 
 let lastSuccessfulSnapshot: SnapshotDTO | null = null;
 

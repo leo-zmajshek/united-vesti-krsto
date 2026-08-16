@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getSnapshot } from "@/lib/manutd.functions";
 import { StatusBlock } from "@/components/united/StatusBlock";
@@ -62,12 +62,33 @@ const NAV = [
 
 function Home() {
   const { data: snapshot, refetch } = useSuspenseQuery(snapshotQuery);
+  const queryClient = useQueryClient();
+
+  // ESPN blocks our server's IP, so the browser tops the snapshot up with
+  // cups, European and friendly matches after hydration.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { enrichSnapshotWithEspn } = await import("@/lib/espn-feed");
+        const enriched = await enrichSnapshotWithEspn(snapshot);
+        if (!cancelled) queryClient.setQueryData(snapshotQuery.queryKey, enriched);
+      } catch {
+        /* keep the server snapshot */
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshot.updatedAt, queryClient]);
 
   useEffect(() => {
     const interval = snapshot.live ? 30_000 : 5 * 60_000;
     const id = setInterval(() => void refetch(), interval);
     return () => clearInterval(id);
   }, [snapshot.live, refetch]);
+
 
   return (
     <main className="min-h-dvh bg-background pb-10">
