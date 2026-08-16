@@ -123,6 +123,13 @@ function Home() {
           Прашај што сакаш за Јунајтед
         </Link>
       </div>
+
+      <footer className="px-4 pb-10 text-center text-lg text-muted-foreground sm:px-6">
+        <p>
+          Совет: во Chrome отворете го менито (три точки) и изберете „Додај на почетен екран“ за да ја
+          отворате страницата со едно допирање.
+        </p>
+      </footer>
     </main>
   );
 }
