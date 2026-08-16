@@ -258,6 +258,32 @@ async function loadTable(): Promise<TableRowDTO[]> {
   return [];
 }
 
+async function loadEspnTable(): Promise<TableRowDTO[]> {
+  const data = await getJson<EspnRecord>("https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings");
+  const group = list(data["children"])[0];
+  const entries = group ? list(record(group["standings"])["entries"]) : [];
+  return entries.map((entry) => {
+    const team = record(entry["team"]);
+    const stats = list(entry["stats"]);
+    const stat = (name: string) => numberOrNull(stats.find((item) => text(item["name"]) === name)?.["value"]) ?? 0;
+    const logo = list(team["logos"])[0];
+    const teamName = text(team["displayName"]);
+    return {
+      rank: stat("rank"),
+      team: teamName,
+      badge: logo ? text(logo["href"]) || null : null,
+      played: stat("gamesPlayed"),
+      win: stat("wins"),
+      draw: stat("ties"),
+      loss: stat("losses"),
+      goalsFor: stat("pointsFor"),
+      goalsAgainst: stat("pointsAgainst"),
+      points: stat("points"),
+      isUnited: text(team["id"]) === ESPN_TEAM_ID || isUnited(teamName),
+    };
+  });
+}
+
 /* ---------- News ---------- */
 
 function decodeEntities(s: string) {
@@ -434,7 +460,9 @@ export async function getSnapshotData(): Promise<SnapshotDTO> {
     cached("live", 2 * 60_000, loadLive).catch(() => null),
     cached("results", 15 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
     cached("fixtures", 15 * 60_000, loadFixtures).catch(() => [] as MatchDTO[]),
-    cached("table", 30 * 60_000, loadTable).catch(() => [] as TableRowDTO[]),
+    cached("espn-table", 30 * 60_000, loadEspnTable)
+      .catch(() => cached("table", 30 * 60_000, loadTable))
+      .catch(() => [] as TableRowDTO[]),
     cached("news", 30 * 60_000, loadNews).catch(() => [] as NewsItemDTO[]),
   ]);
 
