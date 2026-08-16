@@ -94,25 +94,27 @@ function ChatPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-background">
+    <main className="flex min-h-dvh flex-col bg-background">
       <header
-        className="sticky top-0 z-20 flex items-center gap-3 px-4 py-4"
+        className="sticky top-0 z-20 flex items-center gap-3 px-4 py-3"
         style={{ background: "var(--gradient-hero)" }}
       >
         <Link
           to="/"
-          className="rounded-xl bg-card px-4 py-3 text-lg font-bold text-card-foreground"
+          className="shrink-0 rounded-xl bg-card px-4 py-3 text-base font-bold text-card-foreground sm:text-lg"
           aria-label="Назад на почетната страница"
         >
           ← Назад
         </Link>
-        <h1 className="text-2xl font-black text-primary-foreground">Прашај за Јунајтед</h1>
+        <h1 className="min-w-0 text-xl font-black leading-tight text-primary-foreground sm:text-2xl">
+          Прашај за Јунајтед
+        </h1>
       </header>
 
       <div className="flex-1 space-y-4 px-4 py-5">
         {messages.length === 0 ? (
           <div>
-            <p className="text-xl leading-relaxed">
+            <p className="text-lg leading-relaxed sm:text-xl">
               Прашајте што сакате за Манчестер Јунајтед. Одговорот доаѓа на македонски, кратко и јасно.
             </p>
             <ul className="mt-4 space-y-3">
@@ -120,7 +122,7 @@ function ChatPage() {
                 <li key={s}>
                   <button
                     onClick={() => void send(s)}
-                    className="w-full rounded-2xl border-2 border-border bg-card px-4 py-4 text-left text-xl font-semibold"
+                    className="min-h-14 w-full rounded-2xl border-2 border-border bg-card px-4 py-4 text-left text-lg font-semibold sm:text-xl"
                   >
                     {s}
                   </button>
@@ -133,19 +135,19 @@ function ChatPage() {
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`rounded-2xl px-4 py-4 text-xl leading-relaxed ${
+            className={`rounded-2xl px-4 py-3 text-lg leading-relaxed sm:text-xl ${
               m.role === "user"
-                ? "ml-8 bg-secondary text-secondary-foreground"
-                : "mr-4 border-2 border-border bg-card text-card-foreground"
+                ? "ml-6 bg-secondary text-secondary-foreground"
+                : "mr-2 border-2 border-border bg-card text-card-foreground"
             }`}
           >
             {m.content}
           </div>
         ))}
 
-        {loading ? <p className="text-xl text-muted-foreground">Размислувам…</p> : null}
+        {loading ? <p className="text-lg text-muted-foreground">Размислувам…</p> : null}
         {error ? (
-          <p className="rounded-2xl bg-destructive px-4 py-3 text-xl text-destructive-foreground">{error}</p>
+          <p className="rounded-2xl bg-destructive px-4 py-3 text-lg text-destructive-foreground">{error}</p>
         ) : null}
         <div ref={bottomRef} />
       </div>
@@ -155,7 +157,7 @@ function ChatPage() {
           e.preventDefault();
           void send(input);
         }}
-        className="sticky bottom-0 border-t-4 border-border bg-card px-4 py-4"
+        className="sticky bottom-0 border-t-4 border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       >
         <label htmlFor="q" className="sr-only">
           Вашето прашање
@@ -166,20 +168,20 @@ function ChatPage() {
           onChange={(e) => setInput(e.target.value)}
           rows={2}
           placeholder="Напишете прашање…"
-          className="w-full rounded-2xl border-2 border-input bg-background px-4 py-3 text-xl"
+          className="w-full rounded-2xl border-2 border-input bg-background px-4 py-3 text-lg sm:text-xl"
         />
         <div className="mt-3 flex gap-3">
           <button
             type="button"
             onClick={startVoice}
-            className="rounded-2xl border-2 border-primary px-5 py-4 text-xl font-bold text-primary"
+            className="min-h-14 shrink-0 rounded-2xl border-2 border-primary px-4 py-4 text-lg font-bold text-primary sm:text-xl"
           >
             {listening ? "Слушам…" : "🎤 Кажи"}
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 rounded-2xl bg-primary px-5 py-4 text-xl font-black text-primary-foreground disabled:opacity-60"
+            className="min-h-14 flex-1 rounded-2xl bg-primary px-5 py-4 text-lg font-black text-primary-foreground disabled:opacity-60 sm:text-xl"
           >
             Прашај
           </button>
