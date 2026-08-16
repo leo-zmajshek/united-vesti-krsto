@@ -69,9 +69,9 @@ function Home() {
   }, [snapshot.live, refetch]);
 
   return (
-    <main className="min-h-screen bg-background pb-16">
-      <header className="px-4 pt-6 text-center sm:px-6" style={{ background: "var(--gradient-hero)" }}>
-        <h1 className="pb-5 text-4xl font-black uppercase leading-none tracking-tight text-primary-foreground sm:text-5xl">
+    <main className="min-h-dvh bg-background pb-10">
+      <header className="px-4 pt-5 text-center sm:px-6" style={{ background: "var(--gradient-hero)" }}>
+        <h1 className="pb-4 text-3xl font-black uppercase leading-none tracking-tight text-primary-foreground sm:text-5xl">
           Манчестер
           <br />
           Јунајтед
@@ -82,12 +82,12 @@ function Home() {
         aria-label="Брзи кратенки"
         className="sticky top-0 z-20 border-b-4 border-primary bg-card/95 backdrop-blur"
       >
-        <ul className="flex gap-2 overflow-x-auto px-3 py-3">
+        <ul className="flex gap-2 overflow-x-auto px-3 py-2.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]">
           {NAV.map((item) => (
             <li key={item.href} className="shrink-0">
               <a
                 href={item.href}
-                className="block rounded-xl bg-secondary px-4 py-3 text-lg font-bold text-secondary-foreground"
+                className="block rounded-xl bg-secondary px-4 py-3 text-base font-bold text-secondary-foreground sm:text-lg"
               >
                 {item.label}
               </a>
@@ -96,7 +96,7 @@ function Home() {
           <li className="shrink-0">
             <Link
               to="/chat"
-              className="block rounded-xl bg-primary px-4 py-3 text-lg font-bold text-primary-foreground"
+              className="block rounded-xl bg-primary px-4 py-3 text-base font-bold text-primary-foreground sm:text-lg"
             >
               Прашај
             </Link>
@@ -112,16 +112,16 @@ function Home() {
       <TableSection snapshot={snapshot} />
       <NewsSection snapshot={snapshot} />
 
-      <div className="px-4 py-8 sm:px-6">
+      <div className="px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/chat"
-          className="block rounded-2xl bg-primary px-6 py-6 text-center text-2xl font-black text-primary-foreground"
+          className="block rounded-2xl bg-primary px-5 py-5 text-center text-xl font-black text-primary-foreground sm:text-2xl"
         >
           Прашај што сакаш за Јунајтед
         </Link>
       </div>
 
-      <footer className="px-4 pb-10 text-center text-lg text-muted-foreground sm:px-6">
+      <footer className="px-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-center text-base text-muted-foreground sm:px-6 sm:text-lg">
         <p>
           Совет: во Chrome отворете го менито (три точки) и изберете „Додај на почетен екран“ за да ја
           отворате страницата со едно допирање.

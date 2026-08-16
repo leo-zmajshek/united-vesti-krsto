@@ -31,8 +31,8 @@ export function GreetingCard() {
         className="rounded-2xl border-2 border-border bg-card p-5 text-card-foreground"
         style={{ boxShadow: "var(--shadow-card)" }}
       >
-        <p className="text-3xl font-black leading-tight text-primary sm:text-4xl">{g.heading}</p>
-        <p className="mt-2 text-xl leading-relaxed">{g.sub}</p>
+        <p className="text-2xl font-black leading-tight text-primary sm:text-4xl">{g.heading}</p>
+        <p className="mt-2 text-lg leading-relaxed sm:text-xl">{g.sub}</p>
       </div>
     </section>
   );

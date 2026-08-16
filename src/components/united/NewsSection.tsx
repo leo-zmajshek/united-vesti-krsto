@@ -79,16 +79,16 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
 
   return (
     <Card>
-      <h3 className="text-2xl font-bold leading-snug" suppressHydrationWarning>
+      <h3 className="text-xl font-bold leading-snug break-words sm:text-2xl" suppressHydrationWarning>
         {item.title}
       </h3>
       {item.summary ? (
-        <p className="mt-2 text-xl leading-relaxed" suppressHydrationWarning>
+        <p className="mt-2 text-lg leading-relaxed sm:text-xl" suppressHydrationWarning>
           {item.summary}
         </p>
       ) : null}
       {item.source || item.published ? (
-        <p className="mt-2 text-lg text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground sm:text-lg">
           {[item.source ? `Извор: ${item.source}` : "", item.published].filter(Boolean).join(" · ")}
         </p>
       ) : null}
@@ -99,7 +99,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
         type="button"
         onClick={onExpand}
         aria-expanded={open}
-        className="mt-4 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-primary-foreground"
+        className="mt-4 min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground sm:text-xl"
       >
         {open ? "Затвори ја веста" : "Прочитај повеќе"}
       </button>
@@ -108,17 +108,17 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
         <div className="mt-4 rounded-2xl border-2 border-border bg-background p-4">
           {loading ? (
             <div className="space-y-3" aria-live="polite">
-              <p className="text-xl text-muted-foreground">Ја подготвувам веста…</p>
+              <p className="text-lg text-muted-foreground sm:text-xl">Ја подготвувам веста…</p>
               <div className="h-5 w-full animate-pulse rounded bg-muted" />
               <div className="h-5 w-5/6 animate-pulse rounded bg-muted" />
               <div className="h-5 w-4/6 animate-pulse rounded bg-muted" />
             </div>
           ) : error ? (
-            <p className="text-xl text-destructive">{error}</p>
+            <p className="text-lg text-destructive sm:text-xl">{error}</p>
           ) : (
             <div className="space-y-3">
               {article.split(/\n{2,}/).map((p, i) => (
-                <p key={i} className="text-xl leading-relaxed">
+                <p key={i} className="text-lg leading-relaxed sm:text-xl">
                   {p}
                 </p>
               ))}
@@ -128,7 +128,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
           <button
             type="button"
             onClick={() => setChatOpen(true)}
-            className="mt-5 w-full rounded-xl bg-secondary px-5 py-4 text-xl font-bold text-secondary-foreground"
+            className="mt-5 min-h-14 w-full rounded-xl bg-secondary px-5 py-4 text-lg font-bold text-secondary-foreground sm:text-xl"
           >
             Прашај за оваа вест
           </button>
@@ -142,13 +142,13 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
           aria-modal="true"
           aria-label="Прашај за веста"
         >
-          <div className="flex max-h-[88vh] w-full max-w-xl flex-col rounded-t-3xl border-2 border-border bg-card sm:rounded-3xl">
+          <div className="flex max-h-[88dvh] w-full max-w-xl flex-col rounded-t-3xl border-2 border-border bg-card sm:rounded-3xl">
             <div className="flex items-start gap-3 border-b-2 border-border p-4">
-              <p className="min-w-0 flex-1 text-xl font-bold leading-snug">{item.title}</p>
+              <p className="min-w-0 flex-1 text-lg font-bold leading-snug break-words sm:text-xl">{item.title}</p>
               <button
                 type="button"
                 onClick={() => setChatOpen(false)}
-                className="shrink-0 rounded-xl bg-secondary px-4 py-2 text-lg font-bold text-secondary-foreground"
+                className="shrink-0 rounded-xl bg-secondary px-4 py-3 text-base font-bold text-secondary-foreground sm:text-lg"
               >
                 Затвори
               </button>
@@ -156,7 +156,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
 
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {messages.length === 0 ? (
-                <p className="text-xl text-muted-foreground">
+                <p className="text-lg text-muted-foreground sm:text-xl">
                   Прашајте што сакате за оваа вест, на македонски.
                 </p>
               ) : (
@@ -164,32 +164,32 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
                   m.role === "user" ? (
                     <p
                       key={i}
-                      className="ml-auto max-w-[85%] rounded-2xl bg-primary px-4 py-3 text-xl font-semibold text-primary-foreground"
+                      className="ml-auto max-w-[85%] rounded-2xl bg-primary px-4 py-3 text-lg font-semibold text-primary-foreground sm:text-xl"
                     >
                       {m.content}
                     </p>
                   ) : (
-                    <p key={i} className="max-w-[95%] text-xl leading-relaxed text-foreground">
+                    <p key={i} className="max-w-[95%] text-lg leading-relaxed text-foreground sm:text-xl">
                       {m.content}
                     </p>
                   ),
                 )
               )}
-              {asking ? <p className="text-xl text-muted-foreground">Размислувам…</p> : null}
+              {asking ? <p className="text-lg text-muted-foreground">Размислувам…</p> : null}
             </div>
 
-            <form onSubmit={onAsk} className="border-t-2 border-border p-4">
+            <form onSubmit={onAsk} className="border-t-2 border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 rows={2}
                 placeholder="Напишете прашање…"
-                className="w-full rounded-xl border-2 border-border bg-background p-3 text-xl text-foreground"
+                className="w-full rounded-xl border-2 border-border bg-background p-3 text-lg text-foreground sm:text-xl"
               />
               <button
                 type="submit"
                 disabled={asking || question.trim().length === 0}
-                className="mt-3 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-primary-foreground disabled:opacity-50"
+                className="mt-3 min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground disabled:opacity-50 sm:text-xl"
               >
                 Прашај
               </button>
