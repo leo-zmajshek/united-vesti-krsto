@@ -79,16 +79,16 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
 
   return (
     <Card>
-      <h3 className="text-2xl font-bold leading-snug" suppressHydrationWarning>
+      <h3 className="text-xl font-bold leading-snug break-words sm:text-2xl" suppressHydrationWarning>
         {item.title}
       </h3>
       {item.summary ? (
-        <p className="mt-2 text-xl leading-relaxed" suppressHydrationWarning>
+        <p className="mt-2 text-lg leading-relaxed sm:text-xl" suppressHydrationWarning>
           {item.summary}
         </p>
       ) : null}
       {item.source || item.published ? (
-        <p className="mt-2 text-lg text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground sm:text-lg">
           {[item.source ? `Извор: ${item.source}` : "", item.published].filter(Boolean).join(" · ")}
         </p>
       ) : null}
@@ -99,7 +99,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
         type="button"
         onClick={onExpand}
         aria-expanded={open}
-        className="mt-4 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-primary-foreground"
+        className="mt-4 min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground sm:text-xl"
       >
         {open ? "Затвори ја веста" : "Прочитај повеќе"}
       </button>
