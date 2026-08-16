@@ -8,6 +8,12 @@ const FORM_CLASS = {
   loss: "bg-destructive text-destructive-foreground",
 } as const;
 
+const OUTCOME_WORD = {
+  win: "победа",
+  draw: "нерешено",
+  loss: "изгубено",
+} as const;
+
 export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
   const next = snapshot.next;
   return (
@@ -169,74 +175,6 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
           </table>
         )}
       </div>
-    </Section>
-  );
-}
-
-export function StatsSection({ snapshot }: { snapshot: SnapshotDTO }) {
-  const row = snapshot.table.find((r) => r.isUnited);
-  return (
-    <Section>
-      <SectionHeading id="stats" title="Статистики" hint="Форма во последните натпревари." />
-      <div className="mt-5 flex flex-wrap gap-3">
-        {snapshot.form.length === 0 ? (
-          <p className="text-xl text-muted-foreground">Нема податоци за форма.</p>
-        ) : (
-          snapshot.form.map((f, i) => (
-            <span
-              key={i}
-              className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${FORM_CLASS[f]}`}
-            >
-              {OUTCOME_SHORT[f]}
-            </span>
-          ))
-        )}
-      </div>
-      <p className="mt-3 text-lg text-muted-foreground">П = победа, Н = нерешено, И = изгубено</p>
-
-      {row ? (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Одиграни", value: row.played },
-            { label: "Победи", value: row.win },
-            { label: "Нерешени", value: row.draw },
-            { label: "Порази", value: row.loss },
-            { label: "Дадени голови", value: row.goalsFor },
-            { label: "Примени голови", value: row.goalsAgainst },
-            { label: "Бодови", value: row.points },
-            { label: "Место", value: row.rank },
-          ].map((s) => (
-            <Card key={s.label} className="text-center">
-              <p className="text-4xl font-black tabular-nums text-primary">{s.value}</p>
-              <p className="mt-1 text-lg text-muted-foreground">{s.label}</p>
-            </Card>
-          ))}
-        </div>
-      ) : null}
-    </Section>
-  );
-}
-
-export function NewsSection({ snapshot }: { snapshot: SnapshotDTO }) {
-  return (
-    <Section>
-      <SectionHeading id="news" title="Вести" hint="Најново за клубот." />
-      <ul className="mt-5 space-y-4">
-        {snapshot.news.length === 0 ? (
-          <li className="text-xl text-muted-foreground">Моментално нема вести.</li>
-        ) : (
-          snapshot.news.map((n) => (
-            <li key={n.link}>
-              <Card>
-                <h3 className="text-2xl font-bold leading-snug">{n.title}</h3>
-                {n.summary ? <p className="mt-2 text-xl leading-relaxed">{n.summary}</p> : null}
-                {n.source ? <p className="mt-2 text-lg text-muted-foreground">Извор: {n.source}</p> : null}
-                {n.serbianOnly ? <SerbianFlagTag /> : null}
-              </Card>
-            </li>
-          ))
-        )}
-      </ul>
     </Section>
   );
 }
