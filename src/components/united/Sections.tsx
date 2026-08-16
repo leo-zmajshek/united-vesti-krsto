@@ -1,11 +1,17 @@
 import type { SnapshotDTO } from "@/lib/manutd.types";
-import { Badge, Card, Section, SectionHeading, SerbianFlagTag } from "./ui";
+import { Badge, Card, Section, SectionHeading } from "./ui";
 import { OUTCOME_SHORT, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
 
 const FORM_CLASS = {
   win: "bg-success text-success-foreground",
   draw: "bg-warning text-warning-foreground",
   loss: "bg-destructive text-destructive-foreground",
+} as const;
+
+const OUTCOME_WORD = {
+  win: "победа",
+  draw: "нерешено",
+  loss: "изгубено",
 } as const;
 
 export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
@@ -39,10 +45,41 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
 }
 
 export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
+  const formMatches = snapshot.results.filter((m) => m.outcome).slice(0, 5).reverse();
   return (
     <Section>
       <SectionHeading id="schedule" title="Распоред на натпревари" hint="Што следи и што помина." />
-      <h3 className="mt-6 text-2xl font-bold">Наскоро</h3>
+
+      {formMatches.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-2xl font-bold">Форма во последните {formMatches.length} натпревари</h3>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {formMatches.map((m, i) => (
+              <span
+                key={m.id}
+                className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${FORM_CLASS[m.outcome!]}`}
+                aria-label={`Натпревар ${i + 1}: ${OUTCOME_SHORT[m.outcome!]}`}
+              >
+                {OUTCOME_SHORT[m.outcome!]}
+                <sup className="ml-0.5 text-base">{i + 1}</sup>
+              </span>
+            ))}
+          </div>
+          <ul className="mt-3 space-y-1">
+            {formMatches.map((m, i) => (
+              <li key={m.id} className="text-lg text-muted-foreground">
+                <span className="font-bold text-foreground">{i + 1}*</span>{" "}
+                {m.isHome ? "Дома против " : "Во гости кај "}
+                {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
+                {OUTCOME_WORD[m.outcome!]})
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-lg text-muted-foreground">П = победа, Н = нерешено, И = изгубено</p>
+        </div>
+      ) : null}
+
+      <h3 className="mt-8 text-2xl font-bold">Наскоро</h3>
       <ul className="mt-3 space-y-3">
         {snapshot.fixtures.length === 0 ? (
           <li className="text-xl text-muted-foreground">Нема закажани натпревари.</li>
@@ -138,74 +175,6 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
           </table>
         )}
       </div>
-    </Section>
-  );
-}
-
-export function StatsSection({ snapshot }: { snapshot: SnapshotDTO }) {
-  const row = snapshot.table.find((r) => r.isUnited);
-  return (
-    <Section>
-      <SectionHeading id="stats" title="Статистики" hint="Форма во последните натпревари." />
-      <div className="mt-5 flex flex-wrap gap-3">
-        {snapshot.form.length === 0 ? (
-          <p className="text-xl text-muted-foreground">Нема податоци за форма.</p>
-        ) : (
-          snapshot.form.map((f, i) => (
-            <span
-              key={i}
-              className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${FORM_CLASS[f]}`}
-            >
-              {OUTCOME_SHORT[f]}
-            </span>
-          ))
-        )}
-      </div>
-      <p className="mt-3 text-lg text-muted-foreground">П = победа, Н = нерешено, И = изгубено</p>
-
-      {row ? (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Одиграни", value: row.played },
-            { label: "Победи", value: row.win },
-            { label: "Нерешени", value: row.draw },
-            { label: "Порази", value: row.loss },
-            { label: "Дадени голови", value: row.goalsFor },
-            { label: "Примени голови", value: row.goalsAgainst },
-            { label: "Бодови", value: row.points },
-            { label: "Место", value: row.rank },
-          ].map((s) => (
-            <Card key={s.label} className="text-center">
-              <p className="text-4xl font-black tabular-nums text-primary">{s.value}</p>
-              <p className="mt-1 text-lg text-muted-foreground">{s.label}</p>
-            </Card>
-          ))}
-        </div>
-      ) : null}
-    </Section>
-  );
-}
-
-export function NewsSection({ snapshot }: { snapshot: SnapshotDTO }) {
-  return (
-    <Section>
-      <SectionHeading id="news" title="Вести" hint="Најново за клубот." />
-      <ul className="mt-5 space-y-4">
-        {snapshot.news.length === 0 ? (
-          <li className="text-xl text-muted-foreground">Моментално нема вести.</li>
-        ) : (
-          snapshot.news.map((n) => (
-            <li key={n.link}>
-              <Card>
-                <h3 className="text-2xl font-bold leading-snug">{n.title}</h3>
-                {n.summary ? <p className="mt-2 text-xl leading-relaxed">{n.summary}</p> : null}
-                {n.source ? <p className="mt-2 text-lg text-muted-foreground">Извор: {n.source}</p> : null}
-                {n.serbianOnly ? <SerbianFlagTag /> : null}
-              </Card>
-            </li>
-          ))
-        )}
-      </ul>
     </Section>
   );
 }

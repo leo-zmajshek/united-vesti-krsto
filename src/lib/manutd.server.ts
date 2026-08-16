@@ -328,7 +328,11 @@ async function runSearchTool(name: string, query: string) {
   }
 }
 
-export async function answerQuestion(question: string, history: { role: string; content: string }[]) {
+export async function answerQuestion(
+  question: string,
+  history: { role: string; content: string }[],
+  extraContext?: string,
+) {
   let context = "";
   try {
     const snap = await getSnapshotData();
@@ -356,7 +360,9 @@ export async function answerQuestion(question: string, history: { role: string; 
 - Ако по пребарувањето не најдеш сигурен податок, кажи искрено: „Не најдов сигурен податок за тоа.“ Никогаш не измислувај клуб, име или бројка.
 - Не одбивај да одговориш само затоа што нешто го нема во податоците подолу.
 - Денешен датум: ${new Date().toISOString().slice(0, 10)}.
-Тековни податоци за клубот (JSON): ${context || "нема достапни податоци"}`;
+Тековни податоци за клубот (JSON): ${context || "нема достапни податоци"}${
+    extraContext ? `\n\n${extraContext}` : ""
+  }`;
 
   const messages: AiMessage[] = [
     { role: "system", content: system },
@@ -395,3 +401,54 @@ export async function answerQuestion(question: string, history: { role: string; 
   return final.content ?? "";
 }
 
+
+/* ---------- Full news article (Macedonian) ---------- */
+
+const articleCache = new Map<string, string>();
+
+export async function expandNewsArticle(item: {
+  title: string;
+  summary: string;
+  source: string;
+  link: string;
+}): Promise<string> {
+  const key = item.link || item.title;
+  const hit = articleCache.get(key);
+  if (hit) return hit;
+
+  let facts = "";
+  try {
+    const found = await liveLookup(`Manchester United ${item.title}`);
+    facts = JSON.stringify(found).slice(0, 6000);
+  } catch (err) {
+    console.error("[manutd] article lookup failed", err);
+  }
+
+  const content = await callAi(
+    [
+      {
+        role: "system",
+        content:
+          "Ти си спортски новинар кој пишува на едноставен, јасен македонски јазик за постари читатели. Пишуваш само на кирилица, со точна фудбалска терминологија.",
+      },
+      {
+        role: "user",
+        content: `Напиши целосна кратка вест на македонски за оваа тема за Манчестер Јунајтед.
+Наслов: ${item.title}
+Кратко: ${item.summary}
+Извор: ${item.source}
+Најдени податоци од интернет (може да се на англиски): ${facts || "нема"}
+
+Правила:
+- 3 до 4 кратки пасуси, вкупно околу 150 збора.
+- Едноставни реченици, без англиски изрази.
+- Само проверени факти од податоците погоре; ако нешто не е сигурно, не го пиши.
+- Без наслов, без списоци, само текст во пасуси одвоени со празен ред.`,
+      },
+    ],
+    900,
+  );
+  const text = content.trim();
+  if (text) articleCache.set(key, text);
+  return text;
+}
