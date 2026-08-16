@@ -22,21 +22,21 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
       <div className="mt-5">
         {next ? (
           <Card>
-            <div className="flex items-center gap-4">
-              <Badge src={next.opponentBadge} alt={next.opponent} size={72} />
-              <div>
-                <p className="text-2xl font-black">{teamMk(next.opponent)}</p>
-                <p className="mt-1 text-xl">{next.isHome ? "Игра дома" : "Игра во гости"}</p>
-                <p className="mt-1 text-xl text-muted-foreground">{leagueMk(next.league)}</p>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Badge src={next.opponentBadge} alt={next.opponent} size={56} />
+              <div className="min-w-0">
+                <p className="text-xl font-black break-words sm:text-2xl">{teamMk(next.opponent)}</p>
+                <p className="mt-1 text-lg sm:text-xl">{next.isHome ? "Игра дома" : "Игра во гости"}</p>
+                <p className="mt-1 text-base text-muted-foreground sm:text-xl">{leagueMk(next.league)}</p>
               </div>
             </div>
-            <p className="mt-4 border-t-2 border-border pt-4 text-2xl font-bold text-primary">
+            <p className="mt-4 border-t-2 border-border pt-4 text-xl font-bold text-primary sm:text-2xl">
               {formatDateTime(next.timestamp)}
             </p>
           </Card>
         ) : (
           <Card>
-            <p className="text-xl">Сè уште нема закажан нареден натпревар.</p>
+            <p className="text-lg sm:text-xl">Сè уште нема закажан нареден натпревар.</p>
           </Card>
         )}
       </div>
