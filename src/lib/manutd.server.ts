@@ -139,29 +139,60 @@ function decodeEntities(s: string) {
     .replace(/&amp;/g, "&");
 }
 
-type RawNews = { title: string; link: string; source: string };
+type RawNews = { title: string; link: string; source: string; date: Date | null };
+
+function mkAgo(d: Date | null): string {
+  if (!d) return "";
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 60) return mins <= 1 ? "пред една минута" : `пред ${mins} минути`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours === 1 ? "пред еден час" : `пред ${hours} часа`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "вчера" : `пред ${days} дена`;
+}
 
 async function loadRawNews(): Promise<RawNews[]> {
+  // when:2d + sorting by date keeps the feed genuinely current (relevance sorting surfaces old articles).
   const res = await fetch(
-    "https://news.google.com/rss/search?q=%22Manchester+United%22&hl=en-GB&gl=GB&ceid=GB:en",
+    "https://news.google.com/rss/search?q=%22Manchester+United%22+when:2d&hl=en-GB&gl=GB&ceid=GB:en",
   );
   if (!res.ok) throw new Error(`news ${res.status}`);
   const xml = await res.text();
-  const items = xml.split("<item>").slice(1, 9);
-  return items.map((item) => {
+  const items = xml.split("<item>").slice(1, 30);
+  const parsed = items.map((item) => {
     const pick = (tag: string) => {
       const m = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
       return m ? decodeEntities(m[1]!.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, "").trim()) : "";
     };
     const title = pick("title");
     const source = pick("source");
+    const rawDate = pick("pubDate");
+    const parsedDate = rawDate ? new Date(rawDate) : null;
     return {
       title: source ? title.replace(new RegExp(`\\s*-\\s*${source}$`), "") : title,
       link: pick("link"),
       source,
+      date: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
     };
   });
+
+  const maxAge = 4 * 24 * 60 * 60_000;
+  const fresh = parsed.filter((n) => n.title && n.date && Date.now() - n.date.getTime() < maxAge);
+  const list = (fresh.length >= 3 ? fresh : parsed.filter((n) => n.title))
+    .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
+
+  const seen = new Set<string>();
+  const unique: RawNews[] = [];
+  for (const n of list) {
+    const key = n.title.toLowerCase().slice(0, 60);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(n);
+    if (unique.length === 8) break;
+  }
+  return unique;
 }
+
 
 type AiMessage = {
   role: string;
