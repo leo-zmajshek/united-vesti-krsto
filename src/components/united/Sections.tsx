@@ -39,10 +39,41 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
 }
 
 export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
+  const formMatches = snapshot.results.filter((m) => m.outcome).slice(0, 5).reverse();
   return (
     <Section>
       <SectionHeading id="schedule" title="Распоред на натпревари" hint="Што следи и што помина." />
-      <h3 className="mt-6 text-2xl font-bold">Наскоро</h3>
+
+      {formMatches.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-2xl font-bold">Форма во последните {formMatches.length} натпревари</h3>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {formMatches.map((m, i) => (
+              <span
+                key={m.id}
+                className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${FORM_CLASS[m.outcome!]}`}
+                aria-label={`Натпревар ${i + 1}: ${OUTCOME_SHORT[m.outcome!]}`}
+              >
+                {OUTCOME_SHORT[m.outcome!]}
+                <sup className="ml-0.5 text-base">{i + 1}</sup>
+              </span>
+            ))}
+          </div>
+          <ul className="mt-3 space-y-1">
+            {formMatches.map((m, i) => (
+              <li key={m.id} className="text-lg text-muted-foreground">
+                <span className="font-bold text-foreground">{i + 1}*</span>{" "}
+                {m.isHome ? "Дома против " : "Во гости кај "}
+                {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
+                {OUTCOME_WORD[m.outcome!]})
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-lg text-muted-foreground">П = победа, Н = нерешено, И = изгубено</p>
+        </div>
+      ) : null}
+
+      <h3 className="mt-8 text-2xl font-bold">Наскоро</h3>
       <ul className="mt-3 space-y-3">
         {snapshot.fixtures.length === 0 ? (
           <li className="text-xl text-muted-foreground">Нема закажани натпревари.</li>
