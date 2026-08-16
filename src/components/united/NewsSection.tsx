@@ -72,8 +72,14 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
 
   return (
     <Card>
-      <h3 className="text-2xl font-bold leading-snug">{item.title}</h3>
-      {item.summary ? <p className="mt-2 text-xl leading-relaxed">{item.summary}</p> : null}
+      <h3 className="text-2xl font-bold leading-snug" suppressHydrationWarning>
+        {item.title}
+      </h3>
+      {item.summary ? (
+        <p className="mt-2 text-xl leading-relaxed" suppressHydrationWarning>
+          {item.summary}
+        </p>
+      ) : null}
       {item.source ? <p className="mt-2 text-lg text-muted-foreground">Извор: {item.source}</p> : null}
       {item.serbianOnly ? <SerbianFlagTag /> : null}
 
