@@ -4,6 +4,8 @@ const TEAM_ID = "133612";
 const TEAM_NAMES = ["manchester united", "man united", "man utd"];
 const PL_LEAGUE = "4328";
 const SDB = "https://www.thesportsdb.com/api/v1/json/3";
+const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+const ESPN_TEAM_ID = "360";
 
 import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
 import type {
@@ -72,7 +74,136 @@ function toMatch(e: RawEvent): MatchDTO {
     opponent: united ? away : home,
     opponentBadge: (united ? e["strAwayTeamBadge"] : e["strHomeTeamBadge"]) ?? null,
     outcome,
+    scorers: [],
+    lineups: [],
   };
+}
+
+type EspnRecord = Record<string, unknown>;
+
+function record(value: unknown): EspnRecord {
+  return value && typeof value === "object" ? (value as EspnRecord) : {};
+}
+
+function list(value: unknown): EspnRecord[] {
+  return Array.isArray(value) ? value.map(record) : [];
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function espnMatch(event: EspnRecord): MatchDTO | null {
+  const competition = list(event["competitions"])[0];
+  if (!competition) return null;
+  const competitors = list(competition["competitors"]);
+  const home = competitors.find((item) => text(item["homeAway"]) === "home");
+  const away = competitors.find((item) => text(item["homeAway"]) === "away");
+  if (!home || !away) return null;
+  const homeTeam = record(home["team"]);
+  const awayTeam = record(away["team"]);
+  const homeName = text(homeTeam["displayName"]);
+  const awayName = text(awayTeam["displayName"]);
+  const homeScore = numberOrNull(record(home["score"])["value"] ?? home["score"]);
+  const awayScore = numberOrNull(record(away["score"])["value"] ?? away["score"]);
+  const unitedHome = text(homeTeam["id"]) === ESPN_TEAM_ID || isUnited(homeName);
+  let outcome: MatchDTO["outcome"] = null;
+  if (homeScore != null && awayScore != null) {
+    const mine = unitedHome ? homeScore : awayScore;
+    const theirs = unitedHome ? awayScore : homeScore;
+    outcome = mine > theirs ? "win" : mine === theirs ? "draw" : "loss";
+  }
+  const homeLogo = list(homeTeam["logos"])[0];
+  const awayLogo = list(awayTeam["logos"])[0];
+  const league = record(event["league"]);
+  return {
+    id: text(event["id"]) || crypto.randomUUID(),
+    home: homeName,
+    away: awayName,
+    homeBadge: homeLogo ? text(homeLogo["href"]) || null : null,
+    awayBadge: awayLogo ? text(awayLogo["href"]) || null : null,
+    homeScore,
+    awayScore,
+    league: text(league["name"]) || text(record(event["season"])["displayName"]),
+    timestamp: text(event["date"]) || null,
+    isHome: unitedHome,
+    opponent: unitedHome ? awayName : homeName,
+    opponentBadge: unitedHome
+      ? (awayLogo ? text(awayLogo["href"]) || null : null)
+      : (homeLogo ? text(homeLogo["href"]) || null : null),
+    outcome,
+    scorers: [],
+    lineups: [],
+  };
+}
+
+async function loadEspnSchedule(): Promise<{ live: LiveDTO | null; results: MatchDTO[]; fixtures: MatchDTO[] }> {
+  const data = await getJson<EspnRecord>(`${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`);
+  const events = list(data["events"]);
+  const results: MatchDTO[] = [];
+  const fixtures: MatchDTO[] = [];
+  let live: LiveDTO | null = null;
+  for (const event of events) {
+    const match = espnMatch(event);
+    const competition = list(event["competitions"])[0];
+    if (!match || !competition) continue;
+    const status = record(record(competition["status"])["type"]);
+    const state = text(status["state"]);
+    if (state === "in") {
+      live = { ...match, progress: text(status["detail"]).replace(/[^0-9+]/g, ""), status: text(status["detail"]) };
+    } else if (state === "post") {
+      results.push(match);
+    } else {
+      fixtures.push(match);
+    }
+  }
+  return { live, results, fixtures };
+}
+
+async function addMatchDetails(match: MatchDTO | LiveDTO | null): Promise<typeof match> {
+  if (!match) return match;
+  try {
+    const schedule = await getJson<EspnRecord>(`${ESPN}/all/summary?event=${encodeURIComponent(match.id)}`);
+    const headerCompetition = list(record(schedule["header"])["competitions"])[0];
+    const scorers = headerCompetition
+      ? list(headerCompetition["details"])
+          .filter((detail) => detail["scoringPlay"] === true)
+          .map((detail) => {
+            const athlete = record(list(detail["participants"])[0]?.["athlete"]);
+            const clock = record(detail["clock"]);
+            const detailText = text(detail["text"]).toLowerCase();
+            return {
+              player: text(athlete["displayName"]) || "Непознат стрелец",
+              minute: text(clock["displayValue"]) || "—",
+              team: text(record(detail["team"])["displayName"]),
+              ownGoal: detailText.includes("own goal"),
+              penalty: detailText.includes("penalty"),
+            };
+          })
+      : [];
+    const lineups = list(schedule["rosters"])
+      .map((roster) => ({
+        team: text(record(roster["team"])["displayName"]),
+        formation: text(roster["formation"]),
+        starters: list(roster["roster"])
+          .filter((player) => player["starter"] === true)
+          .map((player) => ({
+            name: text(record(player["athlete"])["displayName"]),
+            number: text(player["jersey"]),
+          })),
+      }))
+      .filter((lineup) => lineup.starters.length > 0);
+    return { ...match, scorers, lineups };
+  } catch (error) {
+    console.error("[manutd] match details failed", error);
+    return match;
+  }
 }
 
 async function loadResults(): Promise<MatchDTO[]> {
@@ -193,6 +324,22 @@ async function loadRawNews(): Promise<RawNews[]> {
   return unique;
 }
 
+async function loadEspnNews(): Promise<RawNews[]> {
+  const data = await getJson<EspnRecord>(`${ESPN}/eng.1/news?team=${ESPN_TEAM_ID}&limit=8`);
+  return list(data["articles"]).map((article) => {
+    const links = record(article["links"]);
+    const web = record(links["web"]);
+    const published = text(article["published"]);
+    const date = published ? new Date(published) : null;
+    return {
+      title: text(article["headline"]),
+      link: text(web["href"]),
+      source: "ESPN",
+      date: date && !Number.isNaN(date.getTime()) ? date : null,
+    };
+  }).filter((item) => item.title);
+}
+
 
 type AiMessage = {
   role: string;
@@ -234,7 +381,13 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
 
 
 async function loadNews(): Promise<NewsItemDTO[]> {
-  const raw = await loadRawNews();
+  let raw: RawNews[];
+  try {
+    raw = await loadRawNews();
+  } catch (error) {
+    console.error("[manutd] Google News unavailable, using fallback", error);
+    raw = await loadEspnNews();
+  }
   if (raw.length === 0) return [];
   const prompt = `Преведи ги следниве наслови на вести за Манчестер Јунајтед на македонски јазик.
 За секој наслов дај краток наслов (до 9 збора) и една проста реченица објаснување, со точна фудбалска терминологија на македонски (натпревар, стартна постава, трансфер, повреда, тренер, полувреме, пенал, црвен картон).
@@ -276,13 +429,18 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 /* ---------- Snapshot ---------- */
 
 export async function getSnapshotData(): Promise<SnapshotDTO> {
-  const [live, results, fixtures, table, news] = await Promise.all([
-    cached("live", 30_000, loadLive).catch(() => null),
-    cached("results", 5 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
+  const [espn, fallbackLive, fallbackResults, fallbackFixtures, table, news] = await Promise.all([
+    cached("espn-schedule", 2 * 60_000, loadEspnSchedule).catch(() => ({ live: null, results: [], fixtures: [] })),
+    cached("live", 2 * 60_000, loadLive).catch(() => null),
+    cached("results", 15 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
     cached("fixtures", 15 * 60_000, loadFixtures).catch(() => [] as MatchDTO[]),
     cached("table", 30 * 60_000, loadTable).catch(() => [] as TableRowDTO[]),
     cached("news", 30 * 60_000, loadNews).catch(() => [] as NewsItemDTO[]),
   ]);
+
+  const live = espn.live ?? fallbackLive;
+  const results = espn.results.length > 0 ? espn.results : fallbackResults;
+  const fixtures = espn.fixtures.length > 0 ? espn.fixtures : fallbackFixtures;
 
   const sortedResults = [...results].sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
@@ -291,9 +449,16 @@ export async function getSnapshotData(): Promise<SnapshotDTO> {
     (a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime(),
   );
 
+  const last = sortedResults[0] ?? null;
+  const detailedMatch = await cached(
+    `match-details-${live?.id ?? last?.id ?? "none"}`,
+    live ? 60_000 : 6 * 60 * 60_000,
+    () => addMatchDetails(live ?? last),
+  ).catch(() => live ?? last);
+
   return {
-    live,
-    last: sortedResults[0] ?? null,
+    live: live ? (detailedMatch as LiveDTO) : null,
+    last: live ? last : (detailedMatch as MatchDTO | null),
     next: sortedFixtures[0] ?? null,
     fixtures: sortedFixtures.slice(0, 6),
     results: sortedResults.slice(0, 6),

@@ -14,9 +14,25 @@ export type MatchDTO = {
   opponent: string;
   opponentBadge: string | null;
   outcome: "win" | "draw" | "loss" | null;
+  scorers: GoalEventDTO[];
+  lineups: TeamLineupDTO[];
 };
 
 export type LiveDTO = MatchDTO & { progress: string; status: string };
+
+export type GoalEventDTO = {
+  player: string;
+  minute: string;
+  team: string;
+  ownGoal: boolean;
+  penalty: boolean;
+};
+
+export type TeamLineupDTO = {
+  team: string;
+  formation: string;
+  starters: { name: string; number: string }[];
+};
 
 export type TableRowDTO = {
   rank: number;
