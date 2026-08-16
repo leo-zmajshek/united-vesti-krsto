@@ -5,6 +5,7 @@ const TEAM_NAMES = ["manchester united", "man united", "man utd"];
 const PL_LEAGUE = "4328";
 const SDB = "https://www.thesportsdb.com/api/v1/json/3";
 
+import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
 import type {
   MatchDTO,
   LiveDTO,
@@ -162,7 +163,15 @@ async function loadRawNews(): Promise<RawNews[]> {
   });
 }
 
-async function callAi(messages: { role: string; content: string }[], maxTokens = 1200) {
+type AiMessage = {
+  role: string;
+  content: string | null;
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+  name?: string;
+};
+
+async function callAiRaw(messages: AiMessage[], maxTokens: number, tools?: unknown[]) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("Missing LOVABLE_API_KEY");
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -175,6 +184,7 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
       model: "google/gemini-2.5-flash",
       messages,
       max_tokens: maxTokens,
+      ...(tools ? { tools } : {}),
     }),
   });
   if (!res.ok) {
@@ -182,9 +192,15 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
     console.error("[manutd] AI error", res.status, text);
     throw new Error(res.status === 429 ? "rate_limited" : "ai_failed");
   }
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return json.choices?.[0]?.message?.content ?? "";
+  const json = (await res.json()) as { choices?: { message?: AiMessage }[] };
+  return json.choices?.[0]?.message ?? { role: "assistant", content: "" };
 }
+
+async function callAi(messages: { role: string; content: string }[], maxTokens = 1200) {
+  const msg = await callAiRaw(messages as AiMessage[], maxTokens);
+  return msg.content ?? "";
+}
+
 
 async function loadNews(): Promise<NewsItemDTO[]> {
   const raw = await loadRawNews();
@@ -258,6 +274,60 @@ export async function getSnapshotData(): Promise<SnapshotDTO> {
   };
 }
 
+const SEARCH_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description:
+        "Пребарај го интернетот во живо за актуелни факти (тековен клуб на играч, трансфери, тренер, повреди, резултати). Користи кратко прашање на англиски.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Search query in English" } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_news",
+      description: "Најнови вести (наслови со датум) за дадена тема. Прашање на англиски.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "News query in English" } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "wikipedia",
+      description: "Енциклопедиски податоци за играч, клуб или тренер. Име на англиски.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Page title in English" } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+async function runSearchTool(name: string, query: string) {
+  try {
+    if (name === "search_news") return { news: await searchNews(query) };
+    if (name === "wikipedia") return { wikipedia: await wikiLookup(query) };
+    return await liveLookup(query);
+  } catch (err) {
+    console.error("[manutd] tool failed", name, err);
+    return { error: "Пребарувањето не успеа." };
+  }
+}
+
 export async function answerQuestion(question: string, history: { role: string; content: string }[]) {
   let context = "";
   try {
@@ -269,6 +339,7 @@ export async function answerQuestion(question: string, history: { role: string; 
       fixtures: snap.fixtures,
       results: snap.results,
       table: snap.table.slice(0, 20),
+      news: snap.news.map((n) => n.title),
     });
   } catch (err) {
     console.error("[manutd] context load failed", err);
@@ -279,18 +350,48 @@ export async function answerQuestion(question: string, history: { role: string; 
 - Одговарај ИСКЛУЧИВО на македонски јазик, со кирилица.
 - Кратки, едноставни реченици. Најмногу 4-5 реченици. Без англиски изрази и без стручен жаргон.
 - Користи точна македонска фудбалска терминологија (натпревар, стартна постава, полувреме, судија, пенал, црвен картон, трансфер, повреда).
-- Ако не си сигурен во некој податок, кажи искрено дека не си сигурен.
-- Користи го своето општо знаење за клубот (историја, играчи, тренери, трофеи) за да одговориш; ако прашањето е за тековна состојба, користи ги податоците подолу.
+- ТОЧНОСТА Е НАЈВАЖНА. Твоето внатрешно знаење е застарено. За СЕКОЕ прашање за играч, тренер, состав, трансфер, повреда, резултат, табела или било што актуелно, ЗАДОЛЖИТЕЛНО прво повикај ги алатките за пребарување (search_web, search_news, wikipedia) и одговарај само врз основа на најдените податоци.
+- Ако корисникот те исправи или побара да провериш повторно, направи НОВО пребарување со поинакви зборови пред да одговориш. Никогаш не повторувај стар одговор без проверка.
+- Ако податоците од пребарувањето се спротивни на тоа што мислиш дека знаеш, верувај им на пребаните податоци (тие се понови).
+- Ако по пребарувањето не најдеш сигурен податок, кажи искрено: „Не најдов сигурен податок за тоа.“ Никогаш не измислувај клуб, име или бројка.
 - Не одбивај да одговориш само затоа што нешто го нема во податоците подолу.
 - Денешен датум: ${new Date().toISOString().slice(0, 10)}.
 Тековни податоци за клубот (JSON): ${context || "нема достапни податоци"}`;
 
-  return callAi(
-    [
-      { role: "system", content: system },
-      ...history.slice(-8),
-      { role: "user", content: question },
-    ],
-    800,
-  );
+  const messages: AiMessage[] = [
+    { role: "system", content: system },
+    ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: question },
+  ];
+
+  for (let round = 0; round < 4; round++) {
+    const msg = await callAiRaw(messages, 900, SEARCH_TOOLS);
+    const calls = msg.tool_calls ?? [];
+    if (calls.length === 0) return msg.content ?? "";
+    messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: calls });
+    const results = await Promise.all(
+      calls.map(async (c) => {
+        let query = "";
+        try {
+          query = String((JSON.parse(c.function.arguments || "{}") as { query?: string }).query ?? "");
+        } catch {
+          query = "";
+        }
+        const out = query ? await runSearchTool(c.function.name, query) : { error: "no query" };
+        return { id: c.id, name: c.function.name, out };
+      }),
+    );
+    for (const r of results) {
+      messages.push({
+        role: "tool",
+        tool_call_id: r.id,
+        name: r.name,
+        content: JSON.stringify(r.out).slice(0, 6000),
+      });
+    }
+  }
+
+  const final = await callAiRaw(messages, 900);
+  return final.content ?? "";
 }
+

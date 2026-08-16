@@ -24,16 +24,44 @@ export function parseTs(ts: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const TZ = "Europe/Skopje";
+
+function parts(d: Date) {
+  const f = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    weekday: "short",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const map: Record<string, string> = {};
+  for (const p of f.formatToParts(d)) map[p.type] = p.value;
+  const weekdays: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    day: Number(map["day"]),
+    month: Number(map["month"]) - 1,
+    year: Number(map["year"]),
+    hour: map["hour"] === "24" ? "00" : map["hour"]!,
+    minute: map["minute"]!,
+    weekday: weekdays[map["weekday"] ?? "Sun"] ?? 0,
+  };
+}
+
 export function formatTime(ts: string | null): string {
   const d = parseTs(ts);
   if (!d) return "";
-  return d.toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const p = parts(d);
+  return `${p.hour}:${p.minute}`;
 }
 
 export function formatDate(ts: string | null): string {
   const d = parseTs(ts);
   if (!d) return "";
-  return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const p = parts(d);
+  return `${DAYS[p.weekday]}, ${p.day} ${MONTHS[p.month]}`;
 }
 
 export function formatDateTime(ts: string | null): string {
@@ -45,9 +73,11 @@ export function formatDateTime(ts: string | null): string {
 export function isToday(ts: string | null): boolean {
   const d = parseTs(ts);
   if (!d) return false;
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+  const a = parts(d);
+  const b = parts(new Date());
+  return a.day === b.day && a.month === b.month && a.year === b.year;
 }
+
 
 export function hoursUntil(ts: string | null): number {
   const d = parseTs(ts);
