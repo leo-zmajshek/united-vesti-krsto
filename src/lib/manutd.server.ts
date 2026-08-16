@@ -172,7 +172,9 @@ async function loadEspnSchedule(): Promise<{ live: LiveDTO | null; results: Matc
 
 async function addMatchDetails(match: MatchDTO | LiveDTO | null): Promise<typeof match> {
   if (!match) return match;
+  if (!/^\d+$/.test(match.id)) return match; // details endpoint only understands ESPN event ids
   try {
+
     const schedule = await getJson<EspnRecord>(`${ESPN}/all/summary?event=${encodeURIComponent(match.id)}`);
     const headerCompetition = list(record(schedule["header"])["competitions"])[0];
     const scorers = headerCompetition
