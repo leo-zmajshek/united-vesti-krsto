@@ -27,7 +27,7 @@ export function parseTs(ts: string | null): Date | null {
 export function formatTime(ts: string | null): string {
   const d = parseTs(ts);
   if (!d) return "";
-  return d.toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("mk-MK", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function formatDate(ts: string | null): string {
@@ -79,3 +79,69 @@ export const OUTCOME_SHORT = {
   draw: "Н",
   loss: "И",
 } as const;
+
+const TEAM_NAMES_MK: Record<string, string> = {
+  "manchester united": "Манчестер Јунајтед",
+  "manchester city": "Манчестер Сити",
+  "liverpool": "Ливерпул",
+  "arsenal": "Арсенал",
+  "chelsea": "Челзи",
+  "tottenham hotspur": "Тотенхем",
+  "tottenham": "Тотенхем",
+  "everton": "Евертон",
+  "aston villa": "Астон Вила",
+  "newcastle united": "Њукасл",
+  "west ham united": "Вест Хем",
+  "brighton": "Брајтон",
+  "brighton and hove albion": "Брајтон",
+  "crystal palace": "Кристал Палас",
+  "fulham": "Фулам",
+  "brentford": "Брентфорд",
+  "wolverhampton wanderers": "Вулверхемптон",
+  "wolves": "Вулверхемптон",
+  "nottingham forest": "Нотингем Форест",
+  "bournemouth": "Борнмут",
+  "leeds united": "Лидс",
+  "burnley": "Бернли",
+  "sunderland": "Сандерленд",
+  "hull city": "Хал Сити",
+  "leicester city": "Лестер",
+  "southampton": "Саутемптон",
+  "ipswich town": "Ипсвич",
+  "sheffield united": "Шефилд Јунајтед",
+  "ac milan": "Милан",
+  "inter milan": "Интер",
+  "real madrid": "Реал Мадрид",
+  "barcelona": "Барселона",
+  "bayern munich": "Бајерн Минхен",
+  "juventus": "Јувентус",
+  "paris saint-germain": "Пари Сен Жермен",
+  "borussia dortmund": "Борусија Дортмунд",
+  "atletico madrid": "Атлетико Мадрид",
+  "napoli": "Наполи",
+  "roma": "Рома",
+  "ajax": "Ајакс",
+  "porto": "Порто",
+  "benfica": "Бенфика",
+  "celtic": "Селтик",
+  "rangers": "Рејнџерс",
+};
+
+export function teamMk(name: string): string {
+  return TEAM_NAMES_MK[name.trim().toLowerCase()] ?? name;
+}
+
+const LEAGUES_MK: Record<string, string> = {
+  "english premier league": "Премиер лига",
+  "premier league": "Премиер лига",
+  "uefa champions league": "Лига на шампиони",
+  "uefa europa league": "Лига на Европа",
+  "english league cup": "Лига куп",
+  "english fa cup": "ФА куп",
+  "club friendlies": "Пријателски натпревар",
+  "uefa europa conference league": "Конференциска лига",
+};
+
+export function leagueMk(name: string): string {
+  return LEAGUES_MK[name.trim().toLowerCase()] ?? name;
+}
