@@ -488,9 +488,10 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
   ]);
 
   const live = primary.live ?? espn.live ?? fallbackLive;
-  const results = primary.results.length > 0 ? primary.results : espn.results.length > 0 ? espn.results : fallbackResults;
-  const fixtures = primary.fixtures.length > 0 ? primary.fixtures : espn.fixtures.length > 0 ? espn.fixtures : fallbackFixtures;
+  const results = mergeMatches([espn.results, primary.results, fallbackResults]);
+  const fixtures = mergeMatches([espn.fixtures, primary.fixtures, fallbackFixtures]);
   const table = primaryTable.length > 0 ? primaryTable : fallbackTable;
+
 
   const sortedResults = [...results].sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
