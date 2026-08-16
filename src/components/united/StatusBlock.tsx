@@ -174,7 +174,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             homeScore={live.homeScore}
             awayScore={live.awayScore}
           />
-          <p className="mt-4 text-center text-xl text-muted-foreground">{leagueMk(live.league)}</p>
+          <p className="mt-4 text-center text-lg text-muted-foreground sm:text-xl">{leagueMk(live.league)}</p>
           <MatchDetails match={live} />
         </Card>
       </div>
@@ -187,7 +187,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
     return (
       <div id="status" className="scroll-mt-32 px-4 py-6 sm:px-6">
         <Card className="border-primary">
-          <p className="text-center text-2xl font-black uppercase text-primary">
+          <p className="text-center text-xl font-black uppercase text-primary sm:text-2xl">
             {isToday(next.timestamp) ? `Денес во ${formatTime(next.timestamp)}` : formatDateTime(next.timestamp)}
           </p>
           <div className="mt-4">
@@ -238,7 +238,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
               </span>
             </p>
           ) : null}
-          <p className="mt-4 text-center text-xl text-muted-foreground">
+          <p className="mt-4 text-center text-lg text-muted-foreground sm:text-xl">
             {leagueMk(last.league)} · {formatDateTime(last.timestamp)}
           </p>
           <MatchDetails match={last} />
