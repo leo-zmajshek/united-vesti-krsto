@@ -101,6 +101,7 @@ function Home() {
               Прашај
             </Link>
           </li>
+          <HelpCard />
         </ul>
       </nav>
 
