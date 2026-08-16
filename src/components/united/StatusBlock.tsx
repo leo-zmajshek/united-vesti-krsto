@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { SnapshotDTO } from "@/lib/manutd.types";
+import type { MatchDTO, SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card } from "./ui";
 import { OUTCOME_LABEL, countdown, formatDateTime, formatTime, hoursUntil, isToday, leagueMk, teamMk } from "@/lib/mk";
 
@@ -45,6 +45,50 @@ function ScoreLine({
   );
 }
 
+function MatchDetails({ match }: { match: MatchDTO }) {
+  const hasScorers = match.scorers.length > 0;
+  const hasLineups = match.lineups.length > 0;
+  if (!hasScorers && !hasLineups) {
+    return <p className="mt-5 text-center text-lg text-muted-foreground">Стрелците и составите сè уште не се достапни.</p>;
+  }
+  return (
+    <div className="mt-6 border-t-2 border-border pt-5">
+      {hasScorers ? (
+        <section aria-label="Стрелци">
+          <h2 className="text-center text-2xl font-black">Голови</h2>
+          <ul className="mt-3 space-y-2">
+            {match.scorers.map((goal, index) => (
+              <li key={`${goal.player}-${goal.minute}-${index}`} className="flex items-center justify-between gap-3 bg-muted px-4 py-3 text-lg">
+                <span className="font-bold">⚽ {goal.player}{goal.ownGoal ? " (автогол)" : ""}{goal.penalty ? " (пенал)" : ""}</span>
+                <span className="shrink-0 font-black text-primary">{goal.minute}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {hasLineups ? (
+        <section aria-label="Стартни состави" className={hasScorers ? "mt-6" : ""}>
+          <h2 className="text-center text-2xl font-black">Стартни состави</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {match.lineups.map((lineup) => (
+              <div key={lineup.team} className="border-l-4 border-primary bg-muted p-4">
+                <h3 className="text-xl font-black">{teamMk(lineup.team)}{lineup.formation ? ` · ${lineup.formation}` : ""}</h3>
+                <ol className="mt-2 space-y-1 text-lg">
+                  {lineup.starters.map((player) => (
+                    <li key={`${lineup.team}-${player.number}-${player.name}`}>
+                      <span className="inline-block w-8 font-bold text-muted-foreground">{player.number}</span>{player.name}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
   const { live, last, next } = snapshot;
 
@@ -68,6 +112,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             awayScore={live.awayScore}
           />
           <p className="mt-4 text-center text-xl text-muted-foreground">{leagueMk(live.league)}</p>
+          <MatchDetails match={live} />
         </Card>
       </div>
     );
@@ -133,6 +178,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
           <p className="mt-4 text-center text-xl text-muted-foreground">
             {leagueMk(last.league)} · {formatDateTime(last.timestamp)}
           </p>
+          <MatchDetails match={last} />
         </Card>
       </div>
     );
