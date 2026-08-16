@@ -148,15 +148,15 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
       <SectionHeading id="table" title="Табела" hint="Премиер лига." />
       <div className="mt-5 overflow-hidden rounded-2xl border-2 border-border bg-card">
         {snapshot.table.length === 0 ? (
-          <p className="p-4 text-xl text-muted-foreground">Табелата моментално не е достапна.</p>
+          <p className="p-4 text-lg text-muted-foreground">Табелата моментално не е достапна.</p>
         ) : (
-          <table className="w-full text-lg">
+          <table className="w-full table-fixed text-base sm:text-lg">
             <thead>
               <tr className="bg-secondary text-secondary-foreground">
-                <th className="px-2 py-3 text-left font-bold">#</th>
+                <th className="w-9 px-2 py-3 text-left font-bold">#</th>
                 <th className="px-2 py-3 text-left font-bold">Тим</th>
-                <th className="px-2 py-3 text-right font-bold">Од</th>
-                <th className="px-2 py-3 text-right font-bold">Бод</th>
+                <th className="w-12 px-1 py-3 text-right font-bold">Од</th>
+                <th className="w-14 px-2 py-3 text-right font-bold">Бод</th>
               </tr>
             </thead>
             <tbody>
@@ -166,9 +166,9 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
                   className={`border-t border-border ${r.isUnited ? "bg-primary text-primary-foreground" : ""}`}
                 >
                   <td className="px-2 py-3 font-bold tabular-nums">{r.rank}</td>
-                  <td className="px-2 py-3 font-semibold">{teamMk(r.team)}</td>
-                  <td className="px-2 py-3 text-right tabular-nums">{r.played}</td>
-                  <td className="px-2 py-3 text-right text-xl font-black tabular-nums">{r.points}</td>
+                  <td className="px-2 py-3 font-semibold break-words">{teamMk(r.team)}</td>
+                  <td className="px-1 py-3 text-right tabular-nums">{r.played}</td>
+                  <td className="px-2 py-3 text-right text-lg font-black tabular-nums sm:text-xl">{r.points}</td>
                 </tr>
               ))}
             </tbody>
