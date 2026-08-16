@@ -31,8 +31,15 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
     setError(null);
     try {
       const res = await expand({
-        data: { title: item.title, summary: item.summary, source: item.source, link: item.link },
+        data: {
+          title: item.title,
+          summary: item.summary,
+          source: item.source,
+          link: item.link,
+          published: item.published,
+        },
       });
+
       if (res.error) setError(res.error);
       else setArticle(res.article);
     } catch {
