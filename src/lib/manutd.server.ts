@@ -43,9 +43,23 @@ async function getJson<T>(url: string): Promise<T> {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  if (!res.ok) {
+    // ESPN blocks datacenter IPs (403 from the published worker); retry read-only through a text proxy.
+    if (url.includes("espn.com")) return getJsonViaProxy<T>(url);
+    throw new Error(`Request failed: ${res.status}`);
+  }
   return (await res.json()) as T;
 }
+
+async function getJsonViaProxy<T>(url: string): Promise<T> {
+  const res = await fetch(`https://r.jina.ai/${url}`, {
+    headers: { accept: "application/json", "x-respond-with": "text" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Proxy request failed: ${res.status}`);
+  return JSON.parse(await res.text()) as T;
+}
+
 
 function isUnited(name: string | null | undefined) {
   const n = (name ?? "").toLowerCase();
