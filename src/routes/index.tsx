@@ -6,6 +6,7 @@ import { StatusBlock } from "@/components/united/StatusBlock";
 import { NextMatchSection, ScheduleSection, TableSection } from "@/components/united/Sections";
 import { NewsSection } from "@/components/united/NewsSection";
 import { GreetingCard } from "@/components/united/GreetingCard";
+import { HelpCard } from "@/components/united/HelpCard";
 
 const snapshotQuery = queryOptions({
   queryKey: ["united-snapshot"],
