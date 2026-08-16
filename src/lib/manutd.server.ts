@@ -5,6 +5,7 @@ const TEAM_NAMES = ["manchester united", "man united", "man utd"];
 const PL_LEAGUE = "4328";
 const SDB = "https://www.thesportsdb.com/api/v1/json/3";
 
+import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
 import type {
   MatchDTO,
   LiveDTO,
