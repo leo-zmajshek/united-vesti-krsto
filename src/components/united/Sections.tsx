@@ -52,22 +52,22 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
 
       {formMatches.length > 0 ? (
         <div className="mt-6">
-          <h3 className="text-2xl font-bold">Форма во последните {formMatches.length} натпревари</h3>
-          <div className="mt-3 flex flex-wrap gap-3">
+          <h3 className="text-xl font-bold sm:text-2xl">Форма во последните {formMatches.length} натпревари</h3>
+          <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
             {formMatches.map((m, i) => (
               <span
                 key={m.id}
-                className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${FORM_CLASS[m.outcome!]}`}
+                className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-black sm:h-14 sm:w-14 sm:text-2xl ${FORM_CLASS[m.outcome!]}`}
                 aria-label={`Натпревар ${i + 1}: ${OUTCOME_SHORT[m.outcome!]}`}
               >
                 {OUTCOME_SHORT[m.outcome!]}
-                <sup className="ml-0.5 text-base">{i + 1}</sup>
+                <sup className="ml-0.5 text-sm">{i + 1}</sup>
               </span>
             ))}
           </div>
           <ul className="mt-3 space-y-1">
             {formMatches.map((m, i) => (
-              <li key={m.id} className="text-lg text-muted-foreground">
+              <li key={m.id} className="text-base text-muted-foreground sm:text-lg">
                 <span className="font-bold text-foreground">{i + 1}*</span>{" "}
                 {m.isHome ? "Дома против " : "Во гости кај "}
                 {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
@@ -75,25 +75,25 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-lg text-muted-foreground">П = победа, Н = нерешено, И = изгубено</p>
+          <p className="mt-2 text-base text-muted-foreground sm:text-lg">П = победа, Н = нерешено, И = изгубено</p>
         </div>
       ) : null}
 
-      <h3 className="mt-8 text-2xl font-bold">Наскоро</h3>
+      <h3 className="mt-8 text-xl font-bold sm:text-2xl">Наскоро</h3>
       <ul className="mt-3 space-y-3">
         {snapshot.fixtures.length === 0 ? (
-          <li className="text-xl text-muted-foreground">Нема закажани натпревари.</li>
+          <li className="text-lg text-muted-foreground">Нема закажани натпревари.</li>
         ) : (
           snapshot.fixtures.map((m) => (
             <li key={m.id}>
-              <Card className="flex items-center gap-4">
-                <Badge src={m.opponentBadge} alt={m.opponent} size={48} />
+              <Card className="flex items-center gap-3">
+                <Badge src={m.opponentBadge} alt={m.opponent} size={44} />
                 <div className="min-w-0">
-                  <p className="text-xl font-bold">
+                  <p className="text-lg font-bold break-words sm:text-xl">
                     {m.isHome ? "Дома против " : "Во гости кај "}
                     {teamMk(m.opponent)}
                   </p>
-                  <p className="text-lg text-muted-foreground">
+                  <p className="text-base text-muted-foreground sm:text-lg">
                     {formatDateTime(m.timestamp)} · {leagueMk(m.league)}
                   </p>
                 </div>
@@ -103,31 +103,31 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
         )}
       </ul>
 
-      <h3 className="mt-8 text-2xl font-bold">Изиграни натпревари</h3>
+      <h3 className="mt-8 text-xl font-bold sm:text-2xl">Изиграни натпревари</h3>
       <ul className="mt-3 space-y-3">
         {snapshot.results.length === 0 ? (
-          <li className="text-xl text-muted-foreground">Нема податоци.</li>
+          <li className="text-lg text-muted-foreground">Нема податоци.</li>
         ) : (
           snapshot.results.map((m) => (
             <li key={m.id}>
-              <Card className="flex items-center gap-4">
-                <Badge src={m.opponentBadge} alt={m.opponent} size={48} />
+              <Card className="flex items-center gap-3">
+                <Badge src={m.opponentBadge} alt={m.opponent} size={44} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xl font-bold">
+                  <p className="text-lg font-bold break-words sm:text-xl">
                     {m.isHome ? "Дома против " : "Во гости кај "}
                     {teamMk(m.opponent)}
                   </p>
-                  <p className="text-lg text-muted-foreground">
+                  <p className="text-base text-muted-foreground sm:text-lg">
                     {formatDateTime(m.timestamp)} · {leagueMk(m.league)}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-2xl font-black tabular-nums">
+                  <p className="text-xl font-black tabular-nums sm:text-2xl">
                     {m.homeScore ?? "-"}:{m.awayScore ?? "-"}
                   </p>
                   {m.outcome ? (
                     <span
-                      className={`mt-1 inline-block rounded-full px-3 py-0.5 text-base font-bold ${FORM_CLASS[m.outcome]}`}
+                      className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-sm font-bold sm:text-base ${FORM_CLASS[m.outcome]}`}
                     >
                       {OUTCOME_SHORT[m.outcome]}
                     </span>
