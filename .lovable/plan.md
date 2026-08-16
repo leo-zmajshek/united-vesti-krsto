@@ -19,7 +19,7 @@ Auto-refresh every 30s during a live match, otherwise every few minutes. Pull-to
 
 ## Language
 
-Macedonian throughout, with proper football wording (натпревар, полувреме, стартна постава, судија, гол, автогол, дузла, црвен картон). Where only a Serbian-language source exists for a news item, that item is shown with a small "СРП" tag so he knows it is Serbian.
+Macedonian throughout, with proper football wording (натпревар, полувреме, стартна постава, судија, гол, автогол, пенал, црвен картон). Where only a Serbian-language source exists for a news item, that item is shown with a small "СРП" tag so he knows it is Serbian.
 
 ## Data
 
