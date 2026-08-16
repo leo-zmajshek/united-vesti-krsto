@@ -164,14 +164,49 @@ export function teamMk(name: string): string {
 const LEAGUES_MK: Record<string, string> = {
   "english premier league": "Премиер лига",
   "premier league": "Премиер лига",
+  "epl": "Премиер лига",
   "uefa champions league": "Лига на шампиони",
+  "champions league": "Лига на шампиони",
   "uefa europa league": "Лига на Европа",
-  "english league cup": "Лига куп",
-  "english fa cup": "ФА куп",
-  "club friendlies": "Пријателски натпревар",
+  "europa league": "Лига на Европа",
   "uefa europa conference league": "Конференциска лига",
+  "uefa conference league": "Конференциска лига",
+  "english league cup": "Лига куп",
+  "carabao cup": "Лига куп",
+  "efl cup": "Лига куп",
+  "league cup": "Лига куп",
+  "english fa cup": "ФА куп",
+  "emirates fa cup": "ФА куп",
+  "fa cup": "ФА куп",
+  "fa community shield": "Комјунити шилд",
+  "community shield": "Комјунити шилд",
+  "club friendlies": "Пријателски натпревар",
+  "friendly": "Пријателски натпревар",
+  "friendlies": "Пријателски натпревар",
+  "club friendly games": "Пријателски натпревар",
+  "premier league summer series": "Летна серија",
+  "fifa club world cup": "Светско клупско првенство",
 };
 
+const LEAGUE_WORDS_MK: Array<[RegExp, string]> = [
+  [/fa cup/i, "ФА куп"],
+  [/(carabao|efl|league) cup/i, "Лига куп"],
+  [/champions league/i, "Лига на шампиони"],
+  [/europa league/i, "Лига на Европа"],
+  [/conference league/i, "Конференциска лига"],
+  [/community shield/i, "Комјунити шилд"],
+  [/friendl/i, "Пријателски натпревар"],
+  [/premier league/i, "Премиер лига"],
+];
+
 export function leagueMk(name: string): string {
-  return LEAGUES_MK[name.trim().toLowerCase()] ?? name;
+  const key = name.trim().toLowerCase();
+  if (!key) return "";
+  const exact = LEAGUES_MK[key];
+  if (exact) return exact;
+  for (const [pattern, label] of LEAGUE_WORDS_MK) {
+    if (pattern.test(key)) return label;
+  }
+  return name;
 }
+
