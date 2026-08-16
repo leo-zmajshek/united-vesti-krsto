@@ -445,6 +445,7 @@ export async function expandNewsArticle(item: {
   summary: string;
   source: string;
   link: string;
+  published?: string;
 }): Promise<string> {
   const key = item.link || item.title;
   const hit = articleCache.get(key);
@@ -458,6 +459,8 @@ export async function expandNewsArticle(item: {
     console.error("[manutd] article lookup failed", err);
   }
 
+  const today = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "Europe/Skopje" }).format(new Date());
+
   const content = await callAi(
     [
       {
@@ -468,18 +471,22 @@ export async function expandNewsArticle(item: {
       {
         role: "user",
         content: `Напиши целосна кратка вест на македонски за оваа тема за Манчестер Јунајтед.
+Денешен датум: ${today}
 Наслов: ${item.title}
 Кратко: ${item.summary}
 Извор: ${item.source}
+Кога е објавено: ${item.published || "неодамна"}
 Најдени податоци од интернет (може да се на англиски): ${facts || "нема"}
 
 Правила:
 - 3 до 4 кратки пасуси, вкупно околу 150 збора.
 - Едноставни реченици, без англиски изрази.
+- Пиши САМО за актуелната состојба денес. Не користи старо внатрешно знаење за трансфери или состав од претходни сезони.
 - Само проверени факти од податоците погоре; ако нешто не е сигурно, не го пиши.
 - Без наслов, без списоци, само текст во пасуси одвоени со празен ред.`,
       },
     ],
+
     900,
   );
   const text = content.trim();
