@@ -25,23 +25,57 @@ function ScoreLine({
   awayScore: number | null;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-start justify-between gap-2">
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
-        <Badge src={homeBadge} alt={home} size={64} />
-        <span className="text-xl font-bold leading-tight">{teamMk(home)}</span>
+        <Badge src={homeBadge} alt={home} size={52} />
+        <span className="text-base font-bold leading-tight break-words sm:text-xl">{teamMk(home)}</span>
       </div>
-      <div className="shrink-0 text-center">
-        <div className="text-6xl font-black tabular-nums sm:text-7xl">
+      <div className="shrink-0 pt-2 text-center">
+        <div className="text-5xl font-black tabular-nums sm:text-7xl">
           {homeScore ?? "-"}
-          <span className="mx-2 opacity-60">:</span>
+          <span className="mx-1.5 opacity-60 sm:mx-2">:</span>
           {awayScore ?? "-"}
         </div>
       </div>
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
-        <Badge src={awayBadge} alt={away} size={64} />
-        <span className="text-xl font-bold leading-tight">{teamMk(away)}</span>
+        <Badge src={awayBadge} alt={away} size={52} />
+        <span className="text-base font-bold leading-tight break-words sm:text-xl">{teamMk(away)}</span>
       </div>
     </div>
+  );
+}
+
+function normalize(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function goalSide(goalTeam: string, home: string, away: string): "home" | "away" {
+  const g = normalize(goalTeam);
+  const h = normalize(home);
+  const a = normalize(away);
+  if (!g) return "home";
+  if (g === h) return "home";
+  if (g === a) return "away";
+  if (h.includes(g) || g.includes(h)) return "home";
+  if (a.includes(g) || g.includes(a)) return "away";
+  return "home";
+}
+
+function GoalItem({ goal, align }: { goal: { player: string; minute: string; ownGoal: boolean; penalty: boolean }; align: "left" | "right" }) {
+  const note = goal.ownGoal ? " (автогол)" : goal.penalty ? " (пенал)" : "";
+  return (
+    <li
+      className={`flex items-baseline gap-2 rounded-lg bg-muted px-3 py-2 text-base leading-snug sm:text-lg ${
+        align === "right" ? "flex-row-reverse text-right" : ""
+      }`}
+    >
+      <span aria-hidden="true">⚽</span>
+      <span className="min-w-0 flex-1 font-bold break-words">
+        {goal.player}
+        {note}
+      </span>
+      <span className="shrink-0 font-black tabular-nums text-primary">{goal.minute}</span>
+    </li>
   );
 }
 
@@ -49,34 +83,63 @@ function MatchDetails({ match }: { match: MatchDTO }) {
   const hasScorers = match.scorers.length > 0;
   const hasLineups = match.lineups.length > 0;
   if (!hasScorers && !hasLineups) {
-    return <p className="mt-5 text-center text-lg text-muted-foreground">Стрелците и составите сè уште не се достапни.</p>;
+    return <p className="mt-5 text-center text-base text-muted-foreground sm:text-lg">Стрелците и составите сè уште не се достапни.</p>;
   }
+
+  const homeGoals = match.scorers.filter((g) => goalSide(g.team, match.home, match.away) === "home");
+  const awayGoals = match.scorers.filter((g) => goalSide(g.team, match.home, match.away) === "away");
+
+  const homeLineup = match.lineups.find((l) => goalSide(l.team, match.home, match.away) === "home");
+  const awayLineup = match.lineups.find((l) => l !== homeLineup);
+
   return (
     <div className="mt-6 border-t-2 border-border pt-5">
       {hasScorers ? (
         <section aria-label="Стрелци">
-          <h2 className="text-center text-2xl font-black">Голови</h2>
-          <ul className="mt-3 space-y-2">
-            {match.scorers.map((goal, index) => (
-              <li key={`${goal.player}-${goal.minute}-${index}`} className="flex items-center justify-between gap-3 bg-muted px-4 py-3 text-lg">
-                <span className="font-bold">⚽ {goal.player}{goal.ownGoal ? " (автогол)" : ""}{goal.penalty ? " (пенал)" : ""}</span>
-                <span className="shrink-0 font-black text-primary">{goal.minute}</span>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-center text-xl font-black sm:text-2xl">Голови</h2>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-4">
+            <div>
+              <p className="mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">{teamMk(match.home)}</p>
+              <ul className="space-y-2">
+                {homeGoals.length === 0 ? (
+                  <li className="text-base text-muted-foreground">—</li>
+                ) : (
+                  homeGoals.map((goal, i) => (
+                    <GoalItem key={`h-${goal.player}-${goal.minute}-${i}`} goal={goal} align="left" />
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-2 text-right text-sm font-bold uppercase tracking-wide text-muted-foreground">{teamMk(match.away)}</p>
+              <ul className="space-y-2">
+                {awayGoals.length === 0 ? (
+                  <li className="text-right text-base text-muted-foreground">—</li>
+                ) : (
+                  awayGoals.map((goal, i) => (
+                    <GoalItem key={`a-${goal.player}-${goal.minute}-${i}`} goal={goal} align="right" />
+                  ))
+                )}
+              </ul>
+            </div>
+          </div>
         </section>
       ) : null}
       {hasLineups ? (
         <section aria-label="Стартни состави" className={hasScorers ? "mt-6" : ""}>
-          <h2 className="text-center text-2xl font-black">Стартни состави</h2>
+          <h2 className="text-center text-xl font-black sm:text-2xl">Стартни состави</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {match.lineups.map((lineup) => (
-              <div key={lineup.team} className="border-l-4 border-primary bg-muted p-4">
-                <h3 className="text-xl font-black">{teamMk(lineup.team)}{lineup.formation ? ` · ${lineup.formation}` : ""}</h3>
-                <ol className="mt-2 space-y-1 text-lg">
-                  {lineup.starters.map((player) => (
-                    <li key={`${lineup.team}-${player.number}-${player.name}`}>
-                      <span className="inline-block w-8 font-bold text-muted-foreground">{player.number}</span>{player.name}
+            {[homeLineup, awayLineup].filter(Boolean).map((lineup) => (
+              <div key={lineup!.team} className="rounded-xl border-l-4 border-primary bg-muted p-3 sm:p-4">
+                <h3 className="text-lg font-black break-words sm:text-xl">
+                  {teamMk(lineup!.team)}
+                  {lineup!.formation ? ` · ${lineup!.formation}` : ""}
+                </h3>
+                <ol className="mt-2 space-y-1 text-base sm:text-lg">
+                  {lineup!.starters.map((player) => (
+                    <li key={`${lineup!.team}-${player.number}-${player.name}`} className="flex gap-2">
+                      <span className="w-7 shrink-0 font-bold tabular-nums text-muted-foreground">{player.number}</span>
+                      <span className="min-w-0 break-words">{player.name}</span>
                     </li>
                   ))}
                 </ol>
