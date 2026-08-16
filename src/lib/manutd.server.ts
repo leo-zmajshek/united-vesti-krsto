@@ -460,47 +460,8 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 
 /* ---------- Snapshot ---------- */
 
-function matchKey(match: MatchDTO): string {
-  const day = match.timestamp ? new Date(match.timestamp).toISOString().slice(0, 10) : "unknown";
-  const opponent = match.opponent.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  return `${day}|${opponent}`;
-}
+/* matchKey / matchScore / mergeMatches live in ./espn-feed (shared with the browser top-up). */
 
-function matchScore(match: MatchDTO): number {
-  let score = 0;
-  if (match.homeScore !== null && match.awayScore !== null) score += 4;
-  if (/^\d+$/.test(match.id)) score += 2; // ESPN-style numeric event id (details lookup)
-  if (match.league) score += 1;
-  if (match.opponentBadge) score += 1;
-  if (match.timestamp) score += 1;
-  return score;
-}
-
-/** Merge match lists from all providers so every competition shows up, not just one provider's. */
-function mergeMatches(lists: MatchDTO[][]): MatchDTO[] {
-  const byKey = new Map<string, MatchDTO>();
-  for (const list of lists) {
-    for (const match of list) {
-      const key = matchKey(match);
-      const existing = byKey.get(key);
-      if (!existing) {
-        byKey.set(key, match);
-        continue;
-      }
-      const winner = matchScore(match) > matchScore(existing) ? match : existing;
-      const other = winner === match ? existing : match;
-      byKey.set(key, {
-        ...winner,
-        league: winner.league || other.league,
-        opponentBadge: winner.opponentBadge ?? other.opponentBadge,
-        homeBadge: winner.homeBadge ?? other.homeBadge,
-        awayBadge: winner.awayBadge ?? other.awayBadge,
-        timestamp: winner.timestamp ?? other.timestamp,
-      });
-    }
-  }
-  return [...byKey.values()];
-}
 
 let lastSuccessfulSnapshot: SnapshotDTO | null = null;
 
