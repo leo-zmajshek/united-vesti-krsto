@@ -37,8 +37,11 @@ export type NewsItemDTO = {
   summary: string;
   source: string;
   link: string;
+  published: string;
+  publishedAt: string;
   serbianOnly: boolean;
 };
+
 
 export type SnapshotDTO = {
   live: LiveDTO | null;
