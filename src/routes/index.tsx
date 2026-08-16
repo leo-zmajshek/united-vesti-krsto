@@ -35,7 +35,6 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#a01a1a" },
     ],
-    links: [{ rel: "manifest", href: "/manifest.webmanifest" }],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(snapshotQuery),
   errorComponent: () => (
