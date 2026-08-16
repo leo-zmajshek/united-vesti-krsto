@@ -2,16 +2,16 @@ import type { ReactNode } from "react";
 
 export function SectionHeading({ id, title, hint }: { id: string; title: string; hint?: string }) {
   return (
-    <div id={id} className="scroll-mt-32 pt-2">
-      <h2 className="text-3xl font-black uppercase tracking-tight text-foreground sm:text-4xl">{title}</h2>
-      <div className="mt-2 h-1.5 w-24 rounded-full bg-primary" />
-      {hint ? <p className="mt-2 text-lg text-muted-foreground">{hint}</p> : null}
+    <div id={id} className="scroll-mt-28 pt-2">
+      <h2 className="text-2xl font-black uppercase leading-tight tracking-tight text-foreground sm:text-4xl">{title}</h2>
+      <div className="mt-2 h-1.5 w-20 rounded-full bg-primary" />
+      {hint ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{hint}</p> : null}
     </div>
   );
 }
 
 export function Section({ children }: { children: ReactNode }) {
-  return <section className="border-t-4 border-border px-4 py-8 sm:px-6">{children}</section>;
+  return <section className="border-t-4 border-border px-4 py-6 sm:px-6 sm:py-8">{children}</section>;
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
