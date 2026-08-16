@@ -92,6 +92,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
           {[item.source ? `Извор: ${item.source}` : "", item.published].filter(Boolean).join(" · ")}
         </p>
       ) : null}
+      {item.serbianOnly ? <SerbianFlagTag /> : null}
 
 
       <button
