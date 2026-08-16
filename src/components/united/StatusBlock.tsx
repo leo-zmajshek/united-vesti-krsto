@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card } from "./ui";
-import { OUTCOME_LABEL, countdown, formatDateTime, formatTime, hoursUntil, isToday } from "@/lib/mk";
+import { OUTCOME_LABEL, countdown, formatDateTime, formatTime, hoursUntil, isToday, leagueMk, teamMk } from "@/lib/mk";
 
 const OUTCOME_CLASS = {
   win: "bg-success text-success-foreground",
@@ -28,7 +28,7 @@ function ScoreLine({
     <div className="flex items-center justify-between gap-3">
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
         <Badge src={homeBadge} alt={home} size={64} />
-        <span className="text-xl font-bold leading-tight">{home}</span>
+        <span className="text-xl font-bold leading-tight">{teamMk(home)}</span>
       </div>
       <div className="shrink-0 text-center">
         <div className="text-6xl font-black tabular-nums sm:text-7xl">
@@ -39,7 +39,7 @@ function ScoreLine({
       </div>
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
         <Badge src={awayBadge} alt={away} size={64} />
-        <span className="text-xl font-bold leading-tight">{away}</span>
+        <span className="text-xl font-bold leading-tight">{teamMk(away)}</span>
       </div>
     </div>
   );
@@ -67,7 +67,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             homeScore={live.homeScore}
             awayScore={live.awayScore}
           />
-          <p className="mt-4 text-center text-xl text-muted-foreground">{live.league}</p>
+          <p className="mt-4 text-center text-xl text-muted-foreground">{leagueMk(live.league)}</p>
         </Card>
       </div>
     );
@@ -94,7 +94,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
           </div>
           <p className="mt-4 text-center text-2xl font-bold">{countdown(next.timestamp)}</p>
           <p className="mt-1 text-center text-xl text-muted-foreground">
-            {next.league} · {next.isHome ? "дома" : "во гости"}
+            {leagueMk(next.league)} · {next.isHome ? "дома" : "во гости"}
           </p>
           <p className="mt-3 text-center text-lg text-muted-foreground">
             Стартната постава се објавува околу еден час пред натпреварот.
@@ -131,7 +131,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             </p>
           ) : null}
           <p className="mt-4 text-center text-xl text-muted-foreground">
-            {last.league} · {formatDateTime(last.timestamp)}
+            {leagueMk(last.league)} · {formatDateTime(last.timestamp)}
           </p>
         </Card>
       </div>

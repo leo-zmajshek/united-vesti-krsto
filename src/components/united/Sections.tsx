@@ -1,6 +1,6 @@
 import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card, Section, SectionHeading, SerbianFlagTag } from "./ui";
-import { OUTCOME_SHORT, formatDateTime } from "@/lib/mk";
+import { OUTCOME_SHORT, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
 
 const FORM_CLASS = {
   win: "bg-success text-success-foreground",
@@ -19,9 +19,9 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
             <div className="flex items-center gap-4">
               <Badge src={next.opponentBadge} alt={next.opponent} size={72} />
               <div>
-                <p className="text-2xl font-black">{next.opponent}</p>
+                <p className="text-2xl font-black">{teamMk(next.opponent)}</p>
                 <p className="mt-1 text-xl">{next.isHome ? "Игра дома" : "Игра во гости"}</p>
-                <p className="mt-1 text-xl text-muted-foreground">{next.league}</p>
+                <p className="mt-1 text-xl text-muted-foreground">{leagueMk(next.league)}</p>
               </div>
             </div>
             <p className="mt-4 border-t-2 border-border pt-4 text-2xl font-bold text-primary">
@@ -54,10 +54,10 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 <div className="min-w-0">
                   <p className="text-xl font-bold">
                     {m.isHome ? "Дома против " : "Во гости кај "}
-                    {m.opponent}
+                    {teamMk(m.opponent)}
                   </p>
                   <p className="text-lg text-muted-foreground">
-                    {formatDateTime(m.timestamp)} · {m.league}
+                    {formatDateTime(m.timestamp)} · {leagueMk(m.league)}
                   </p>
                 </div>
               </Card>
@@ -78,10 +78,10 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-xl font-bold">
                     {m.isHome ? "Дома против " : "Во гости кај "}
-                    {m.opponent}
+                    {teamMk(m.opponent)}
                   </p>
                   <p className="text-lg text-muted-foreground">
-                    {formatDateTime(m.timestamp)} · {m.league}
+                    {formatDateTime(m.timestamp)} · {leagueMk(m.league)}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
@@ -129,7 +129,7 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
                   className={`border-t border-border ${r.isUnited ? "bg-primary text-primary-foreground" : ""}`}
                 >
                   <td className="px-2 py-3 font-bold tabular-nums">{r.rank}</td>
-                  <td className="px-2 py-3 font-semibold">{r.team}</td>
+                  <td className="px-2 py-3 font-semibold">{teamMk(r.team)}</td>
                   <td className="px-2 py-3 text-right tabular-nums">{r.played}</td>
                   <td className="px-2 py-3 text-right text-xl font-black tabular-nums">{r.points}</td>
                 </tr>
