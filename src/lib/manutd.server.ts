@@ -9,6 +9,8 @@ const ESPN_TEAM_ID = "360";
 
 import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
 import { loadFootballDataMatches, loadFootballDataTable } from "./football-data.server";
+import { mergeMatches } from "./espn-feed";
+
 import type {
   MatchDTO,
   LiveDTO,
