@@ -61,18 +61,28 @@ function goalSide(goalTeam: string, home: string, away: string): "home" | "away"
   return "home";
 }
 
-function GoalItem({ goal, align }: { goal: { player: string; minute: string; ownGoal: boolean; penalty: boolean }; align: "left" | "right" }) {
+function GoalItem({
+  goal,
+  align,
+  teamLabel,
+}: {
+  goal: { player: string; minute: string; ownGoal: boolean; penalty: boolean };
+  align: "left" | "right";
+  teamLabel: string;
+}) {
   const note = goal.ownGoal ? " (автогол)" : goal.penalty ? " (пенал)" : "";
+  const right = align === "right";
   return (
     <li
-      className={`flex items-baseline gap-2 rounded-lg bg-muted px-3 py-2 text-base leading-snug sm:text-lg ${
-        align === "right" ? "flex-row-reverse text-right" : ""
+      className={`flex w-[88%] items-baseline gap-2 rounded-lg bg-muted px-3 py-2 text-base leading-snug sm:text-lg ${
+        right ? "ml-auto flex-row-reverse border-r-4 border-primary text-right" : "mr-auto border-l-4 border-primary"
       }`}
     >
       <span aria-hidden="true">⚽</span>
-      <span className="min-w-0 flex-1 font-bold break-words">
+      <span className="min-w-0 flex-1 font-bold">
         {goal.player}
         {note}
+        <span className="sr-only"> за {teamLabel}</span>
       </span>
       <span className="shrink-0 font-black tabular-nums text-primary">{goal.minute}</span>
     </li>
@@ -86,8 +96,7 @@ function MatchDetails({ match }: { match: MatchDTO }) {
     return <p className="mt-5 text-center text-base text-muted-foreground sm:text-lg">Стрелците и составите сè уште не се достапни.</p>;
   }
 
-  const homeGoals = match.scorers.filter((g) => goalSide(g.team, match.home, match.away) === "home");
-  const awayGoals = match.scorers.filter((g) => goalSide(g.team, match.home, match.away) === "away");
+  const sides = match.scorers.map((goal) => ({ goal, side: goalSide(goal.team, match.home, match.away) }));
 
   const homeLineup = match.lineups.find((l) => goalSide(l.team, match.home, match.away) === "home");
   const awayLineup = match.lineups.find((l) => l !== homeLineup);
@@ -97,32 +106,20 @@ function MatchDetails({ match }: { match: MatchDTO }) {
       {hasScorers ? (
         <section aria-label="Стрелци">
           <h2 className="text-center text-xl font-black sm:text-2xl">Голови</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-4">
-            <div>
-              <p className="mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">{teamMk(match.home)}</p>
-              <ul className="space-y-2">
-                {homeGoals.length === 0 ? (
-                  <li className="text-base text-muted-foreground">—</li>
-                ) : (
-                  homeGoals.map((goal, i) => (
-                    <GoalItem key={`h-${goal.player}-${goal.minute}-${i}`} goal={goal} align="left" />
-                  ))
-                )}
-              </ul>
-            </div>
-            <div>
-              <p className="mb-2 text-right text-sm font-bold uppercase tracking-wide text-muted-foreground">{teamMk(match.away)}</p>
-              <ul className="space-y-2">
-                {awayGoals.length === 0 ? (
-                  <li className="text-right text-base text-muted-foreground">—</li>
-                ) : (
-                  awayGoals.map((goal, i) => (
-                    <GoalItem key={`a-${goal.player}-${goal.minute}-${i}`} goal={goal} align="right" />
-                  ))
-                )}
-              </ul>
-            </div>
+          <div className="mt-3 flex items-baseline justify-between gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+            <span className="min-w-0 flex-1">{teamMk(match.home)}</span>
+            <span className="min-w-0 flex-1 text-right">{teamMk(match.away)}</span>
           </div>
+          <ul className="mt-2 space-y-2">
+            {sides.map(({ goal, side }, i) => (
+              <GoalItem
+                key={`${side}-${goal.player}-${goal.minute}-${i}`}
+                goal={goal}
+                align={side === "home" ? "left" : "right"}
+                teamLabel={side === "home" ? teamMk(match.home) : teamMk(match.away)}
+              />
+            ))}
+          </ul>
         </section>
       ) : null}
       {hasLineups ? (
