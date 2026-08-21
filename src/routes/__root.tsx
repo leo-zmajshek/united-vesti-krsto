@@ -14,19 +14,20 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+    <div className="flex min-h-dvh items-center justify-center bg-background px-5">
+      <div className="w-full max-w-md text-center">
+        <h1 className="text-3xl font-black leading-tight text-foreground sm:text-4xl">
+          Страницата не постои
+        </h1>
+        <p className="mt-3 text-lg text-muted-foreground sm:text-xl">
+          Вратете се на почетната страница.
         </p>
-        <div className="mt-6">
+        <div className="mt-7">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="block min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-xl font-black text-primary-foreground"
           >
-            Go home
+            Почетна страница
           </Link>
         </div>
       </div>
@@ -42,29 +43,29 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+    <div className="flex min-h-dvh items-center justify-center bg-background px-5">
+      <div className="w-full max-w-md text-center">
+        <h1 className="text-3xl font-black leading-tight text-foreground sm:text-4xl">
+          Страницата не се вчита
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+        <p className="mt-3 text-lg text-muted-foreground sm:text-xl">
+          Проверете го интернетот и обидете се повторно.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <div className="mt-7 flex flex-col gap-3">
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-xl font-black text-primary-foreground"
           >
-            Try again
+            Обиди се повторно
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="min-h-14 w-full rounded-xl border-2 border-border bg-card px-5 py-4 text-xl font-bold text-card-foreground"
           >
-            Go home
+            Почетна страница
           </a>
         </div>
       </div>

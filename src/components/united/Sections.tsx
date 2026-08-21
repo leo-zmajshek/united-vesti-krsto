@@ -25,9 +25,15 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
             <div className="flex items-center gap-3 sm:gap-4">
               <Badge src={next.opponentBadge} alt={next.opponent} size={56} />
               <div className="min-w-0">
-                <p className="text-xl font-black break-words sm:text-2xl">{teamMk(next.opponent)}</p>
-                <p className="mt-1 text-lg sm:text-xl">{next.isHome ? "Игра дома" : "Игра во гости"}</p>
-                <p className="mt-1 text-base text-muted-foreground sm:text-xl">{leagueMk(next.league)}</p>
+                <p className="text-xl font-black break-words sm:text-2xl">
+                  {teamMk(next.opponent)}
+                </p>
+                <p className="mt-1 text-lg sm:text-xl">
+                  {next.isHome ? "Игра дома" : "Игра во гости"}
+                </p>
+                <p className="mt-1 text-base text-muted-foreground sm:text-xl">
+                  {leagueMk(next.league)}
+                </p>
               </div>
             </div>
             <p className="mt-4 border-t-2 border-border pt-4 text-xl font-bold text-primary sm:text-2xl">
@@ -44,15 +50,34 @@ export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
   );
 }
 
+/* The competition behind "form" changes with the calendar: in August it is
+   pre-season friendlies, once the season starts it is the league. Naming it from
+   the data keeps the heading honest instead of hardcoding one competition. */
+function formCompetition(matches: { league: string }[]): string {
+  const names = [...new Set(matches.map((m) => leagueMk(m.league)).filter(Boolean))];
+  if (names.length === 0) return "";
+  if (names.length > 1) return "сите натпревари";
+  return names[0]!.replace(/натпревар$/, "натпревари");
+}
+
 export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
-  const formMatches = snapshot.results.filter((m) => m.outcome).slice(0, 5).reverse();
+  const formMatches = snapshot.results
+    .filter((m) => m.outcome)
+    .slice(0, 5)
+    .reverse();
+  const formLeague = formCompetition(formMatches);
   return (
     <Section>
       <SectionHeading id="schedule" title="Распоред на натпревари" hint="Што следи и што помина." />
 
       {formMatches.length > 0 ? (
         <div className="mt-6">
-          <h3 className="text-xl font-bold sm:text-2xl">Форма во последните {formMatches.length} натпревари</h3>
+          <h3 className="text-xl font-bold sm:text-2xl">
+            Форма во последните {formMatches.length} натпревари
+            {formLeague ? (
+              <span className="font-normal text-muted-foreground"> · {formLeague}</span>
+            ) : null}
+          </h3>
           <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
             {formMatches.map((m, i) => (
               <span
@@ -73,10 +98,11 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
                 {OUTCOME_WORD[m.outcome!]}){m.league ? ` · ${leagueMk(m.league)}` : ""}
               </li>
-
             ))}
           </ul>
-          <p className="mt-2 text-base text-muted-foreground sm:text-lg">П = победа, Н = нерешено, И = изгубено</p>
+          <p className="mt-2 text-base text-muted-foreground sm:text-lg">
+            П = победа, Н = нерешено, И = изгубено
+          </p>
         </div>
       ) : null}
 
@@ -169,7 +195,9 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
                   <td className="px-2 py-3 font-bold tabular-nums">{r.rank}</td>
                   <td className="px-2 py-3 font-semibold break-words">{teamMk(r.team)}</td>
                   <td className="px-1 py-3 text-right tabular-nums">{r.played}</td>
-                  <td className="px-2 py-3 text-right text-lg font-black tabular-nums sm:text-xl">{r.points}</td>
+                  <td className="px-2 py-3 text-right text-lg font-black tabular-nums sm:text-xl">
+                    {r.points}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -8,16 +8,15 @@ const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 const ESPN_TEAM_ID = "360";
 
 import { searchNews, wikiLookup, liveLookup } from "./websearch.server";
-import { loadFootballDataMatches, loadFootballDataTable } from "./football-data.server";
+import {
+  loadFootballDataMatches,
+  loadFootballDataTable,
+  loadFootballDataSquad,
+} from "./football-data.server";
 import { mergeMatches } from "./espn-feed";
+import { teamMk, leagueMk } from "./mk";
 
-import type {
-  MatchDTO,
-  LiveDTO,
-  TableRowDTO,
-  NewsItemDTO,
-  SnapshotDTO,
-} from "./manutd.types";
+import type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO } from "./manutd.types";
 
 export type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO };
 
@@ -67,8 +66,6 @@ async function getJsonViaProxy<T>(url: string): Promise<T> {
   return JSON.parse(await res.text()) as T;
 }
 
-
-
 function isUnited(name: string | null | undefined) {
   const n = (name ?? "").toLowerCase();
   return TEAM_NAMES.some((t) => n.includes(t));
@@ -97,7 +94,9 @@ function toMatch(e: RawEvent): MatchDTO {
     homeScore: hs,
     awayScore: as,
     league: e["strLeague"] ?? "",
-    timestamp: e["strTimestamp"] ?? (e["dateEvent"] ? `${e["dateEvent"]}T${e["strTime"] ?? "00:00:00"}` : null),
+    timestamp:
+      e["strTimestamp"] ??
+      (e["dateEvent"] ? `${e["dateEvent"]}T${e["strTime"] ?? "00:00:00"}` : null),
     isHome: united,
     opponent: united ? away : home,
     opponentBadge: (united ? e["strAwayTeamBadge"] : e["strHomeTeamBadge"]) ?? null,
@@ -163,15 +162,23 @@ function espnMatch(event: EspnRecord): MatchDTO | null {
     isHome: unitedHome,
     opponent: unitedHome ? awayName : homeName,
     opponentBadge: unitedHome
-      ? (awayLogo ? text(awayLogo["href"]) || null : null)
-      : (homeLogo ? text(homeLogo["href"]) || null : null),
+      ? awayLogo
+        ? text(awayLogo["href"]) || null
+        : null
+      : homeLogo
+        ? text(homeLogo["href"]) || null
+        : null,
     outcome,
     scorers: [],
     lineups: [],
   };
 }
 
-async function loadEspnSchedule(): Promise<{ live: LiveDTO | null; results: MatchDTO[]; fixtures: MatchDTO[] }> {
+async function loadEspnSchedule(): Promise<{
+  live: LiveDTO | null;
+  results: MatchDTO[];
+  fixtures: MatchDTO[];
+}> {
   const data = await getJson<EspnRecord>(`${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`);
   const events = list(data["events"]);
   const results: MatchDTO[] = [];
@@ -184,7 +191,11 @@ async function loadEspnSchedule(): Promise<{ live: LiveDTO | null; results: Matc
     const status = record(record(competition["status"])["type"]);
     const state = text(status["state"]);
     if (state === "in") {
-      live = { ...match, progress: text(status["detail"]).replace(/[^0-9+]/g, ""), status: text(status["detail"]) };
+      live = {
+        ...match,
+        progress: text(status["detail"]).replace(/[^0-9+]/g, ""),
+        status: text(status["detail"]),
+      };
     } else if (state === "post") {
       results.push(match);
     } else {
@@ -198,8 +209,9 @@ async function addMatchDetails(match: MatchDTO | LiveDTO | null): Promise<typeof
   if (!match) return match;
   if (!/^\d+$/.test(match.id)) return match; // details endpoint only understands ESPN event ids
   try {
-
-    const schedule = await getJson<EspnRecord>(`${ESPN}/all/summary?event=${encodeURIComponent(match.id)}`);
+    const schedule = await getJson<EspnRecord>(
+      `${ESPN}/all/summary?event=${encodeURIComponent(match.id)}`,
+    );
     const headerCompetition = list(record(schedule["header"])["competitions"])[0];
     const scorers = headerCompetition
       ? list(headerCompetition["details"])
@@ -289,13 +301,16 @@ async function loadTable(): Promise<TableRowDTO[]> {
 }
 
 async function loadEspnTable(): Promise<TableRowDTO[]> {
-  const data = await getJson<EspnRecord>("https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings");
+  const data = await getJson<EspnRecord>(
+    "https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings",
+  );
   const group = list(data["children"])[0];
   const entries = group ? list(record(group["standings"])["entries"]) : [];
   return entries.map((entry) => {
     const team = record(entry["team"]);
     const stats = list(entry["stats"]);
-    const stat = (name: string) => numberOrNull(stats.find((item) => text(item["name"]) === name)?.["value"]) ?? 0;
+    const stat = (name: string) =>
+      numberOrNull(stats.find((item) => text(item["name"]) === name)?.["value"]) ?? 0;
     const logo = list(team["logos"])[0];
     const teamName = text(team["displayName"]);
     return {
@@ -338,10 +353,51 @@ function mkAgo(d: Date | null): string {
   return days === 1 ? "вчера" : `пред ${days} дена`;
 }
 
+/* Only stories that are actually about United. ESPN's team feed is really the
+   league feed, so it returns season-preview filler ("Ranking every jersey",
+   "12 African players to watch") that reads as stale news to a United fan. */
+const UNITED_HEADLINE = /manchester united|man united|man utd|man u\b|old trafford|red devils/i;
+
+function isAboutUnited(title: string): boolean {
+  return UNITED_HEADLINE.test(title);
+}
+
+const NEWS_MAX_AGE_MS = 3 * 24 * 60 * 60_000;
+
+function isRecent(date: Date | null): boolean {
+  return date != null && Date.now() - date.getTime() < NEWS_MAX_AGE_MS;
+}
+
+function dedupeNews(items: RawNews[], limit: number): RawNews[] {
+  const seen = new Set<string>();
+  const unique: RawNews[] = [];
+  for (const n of [...items].sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0))) {
+    const key = n.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 45);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(n);
+    if (unique.length === limit) break;
+  }
+  return unique;
+}
+
 async function loadRawNews(): Promise<RawNews[]> {
   // when:2d + sorting by date keeps the feed genuinely current (relevance sorting surfaces old articles).
+  // A plain browser agent and a timeout matter here: without them the published
+  // server's request can hang or be refused, silently falling through to ESPN.
   const res = await fetch(
     "https://news.google.com/rss/search?q=%22Manchester+United%22+when:2d&hl=en-GB&gl=GB&ceid=GB:en",
+    {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36",
+        accept: "application/rss+xml,application/xml,text/xml",
+      },
+      signal: AbortSignal.timeout(10_000),
+    },
   );
   if (!res.ok) throw new Error(`news ${res.status}`);
   const xml = await res.text();
@@ -349,7 +405,14 @@ async function loadRawNews(): Promise<RawNews[]> {
   const parsed = items.map((item) => {
     const pick = (tag: string) => {
       const m = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
-      return m ? decodeEntities(m[1]!.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, "").trim()) : "";
+      return m
+        ? decodeEntities(
+            m[1]!
+              .replace(/<!\[CDATA\[|\]\]>/g, "")
+              .replace(/<[^>]+>/g, "")
+              .trim(),
+          )
+        : "";
     };
     const title = pick("title");
     const source = pick("source");
@@ -363,26 +426,18 @@ async function loadRawNews(): Promise<RawNews[]> {
     };
   });
 
-  const maxAge = 4 * 24 * 60 * 60_000;
-  const fresh = parsed.filter((n) => n.title && n.date && Date.now() - n.date.getTime() < maxAge);
-  const list = (fresh.length >= 3 ? fresh : parsed.filter((n) => n.title))
-    .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
-
-  const seen = new Set<string>();
-  const unique: RawNews[] = [];
-  for (const n of list) {
-    const key = n.title.toLowerCase().slice(0, 60);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(n);
-    if (unique.length === 8) break;
-  }
-  return unique;
+  // Undated or old items are dropped outright. The previous version fell back to
+  // the unfiltered list whenever fewer than three items were fresh, which is how
+  // last season's articles reached the page.
+  return dedupeNews(
+    parsed.filter((n) => n.title && isRecent(n.date)),
+    8,
+  );
 }
 
 async function loadEspnNews(): Promise<RawNews[]> {
-  const data = await getJson<EspnRecord>(`${ESPN}/eng.1/news?team=${ESPN_TEAM_ID}&limit=8`);
-  return list(data["articles"]).map((article) => {
+  const data = await getJson<EspnRecord>(`${ESPN}/eng.1/news?team=${ESPN_TEAM_ID}&limit=20`);
+  const items = list(data["articles"]).map((article) => {
     const links = record(article["links"]);
     const web = record(links["web"]);
     const published = text(article["published"]);
@@ -393,9 +448,12 @@ async function loadEspnNews(): Promise<RawNews[]> {
       source: "ESPN",
       date: date && !Number.isNaN(date.getTime()) ? date : null,
     };
-  }).filter((item) => item.title);
+  });
+  return dedupeNews(
+    items.filter((item) => item.title && isAboutUnited(item.title) && isRecent(item.date)),
+    8,
+  );
 }
-
 
 type AiMessage = {
   role: string;
@@ -405,25 +463,64 @@ type AiMessage = {
   name?: string;
 };
 
-async function callAiRaw(messages: AiMessage[], maxTokens: number, tools?: unknown[]) {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("Missing LOVABLE_API_KEY");
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+/* gemini-2.5-flash is two generations behind what the gateway now serves, and its
+   weak instruction-following is what let the assistant skip its search tools.
+   Override with LOVABLE_AI_MODEL without a redeploy; if the gateway rejects the
+   id we fall back once to the known-good model rather than breaking every
+   AI feature on the page. */
+const AI_MODEL = process.env["LOVABLE_AI_MODEL"] ?? "google/gemini-3.7-flash";
+const AI_MODEL_FALLBACK = "google/gemini-2.5-flash";
+let aiModel = AI_MODEL;
+
+async function postAi(
+  apiKey: string,
+  model: string,
+  messages: AiMessage[],
+  maxTokens: number,
+  tools?: unknown[],
+) {
+  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model,
       messages,
       max_tokens: maxTokens,
       ...(tools ? { tools } : {}),
     }),
+    signal: AbortSignal.timeout(45_000),
   });
+}
+
+async function callAiRaw(messages: AiMessage[], maxTokens: number, tools?: unknown[]) {
+  const apiKey = process.env["LOVABLE_API_KEY"];
+  if (!apiKey) throw new Error("Missing LOVABLE_API_KEY");
+
+  let res = await postAi(apiKey, aiModel, messages, maxTokens, tools);
+
+  // An unknown model id comes back as a 4xx. Pin the fallback for the rest of
+  // this isolate so we retry once, not on every request.
+  if (
+    !res.ok &&
+    res.status >= 400 &&
+    res.status < 500 &&
+    res.status !== 429 &&
+    aiModel !== AI_MODEL_FALLBACK
+  ) {
+    console.error(
+      `[manutd] model "${aiModel}" rejected (${res.status}); falling back to ${AI_MODEL_FALLBACK}`,
+    );
+    aiModel = AI_MODEL_FALLBACK;
+    res = await postAi(apiKey, aiModel, messages, maxTokens, tools);
+  }
+
   if (!res.ok) {
     const text = await res.text();
     console.error("[manutd] AI error", res.status, text);
+    if (res.status === 402) throw new Error("out_of_credit");
     throw new Error(res.status === 429 ? "rate_limited" : "ai_failed");
   }
   const json = (await res.json()) as { choices?: { message?: AiMessage }[] };
@@ -435,14 +532,17 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
   return msg.content ?? "";
 }
 
-
 async function loadNews(): Promise<NewsItemDTO[]> {
-  let raw: RawNews[];
-  try {
-    raw = await loadRawNews();
-  } catch (error) {
+  const primary = await loadRawNews().catch((error) => {
     console.error("[manutd] Google News unavailable, using fallback", error);
-    raw = await loadEspnNews();
+    return [] as RawNews[];
+  });
+  // Top up rather than replace: ESPN alone is thin once league-wide filler is
+  // filtered out, and Google News alone can be blocked from the published server.
+  let raw = primary;
+  if (raw.length < 4) {
+    const extra = await loadEspnNews().catch(() => [] as RawNews[]);
+    raw = dedupeNews([...raw, ...extra], 8);
   }
   if (raw.length === 0) return [];
   const prompt = `Преведи ги следниве наслови на вести за Манчестер Јунајтед на македонски јазик.
@@ -454,7 +554,11 @@ async function loadNews(): Promise<NewsItemDTO[]> {
 ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 
   const content = await callAi([
-    { role: "system", content: "Ти си спортски новинар кој пишува кратко и јасно на македонски јазик. Враќаш само валиден JSON." },
+    {
+      role: "system",
+      content:
+        "Ти си спортски новинар кој пишува кратко и јасно на македонски јазик. Враќаш само валиден JSON.",
+    },
     { role: "user", content: prompt },
   ]);
   const match = content.match(/\[[\s\S]*\]/);
@@ -479,34 +583,48 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
       serbianOnly: !translated,
     };
   });
-
 }
 
 /* ---------- Snapshot ---------- */
 
 /* matchKey / matchScore / mergeMatches live in ./espn-feed (shared with the browser top-up). */
 
-
 let lastSuccessfulSnapshot: SnapshotDTO | null = null;
-
 
 export async function getSnapshotData(footballDataApiKey?: string): Promise<SnapshotDTO> {
   const authenticatedMatches = footballDataApiKey
-    ? cached("football-data-matches", 5 * 60_000, () => loadFootballDataMatches(footballDataApiKey)).catch((error) => {
+    ? cached("football-data-matches", 5 * 60_000, () =>
+        loadFootballDataMatches(footballDataApiKey),
+      ).catch((error) => {
         console.error("[manutd] authenticated match provider failed", error);
         return { live: null, results: [], fixtures: [] };
       })
     : Promise.resolve({ live: null, results: [], fixtures: [] });
   const authenticatedTable = footballDataApiKey
-    ? cached("football-data-table", 30 * 60_000, () => loadFootballDataTable(footballDataApiKey)).catch((error) => {
+    ? cached("football-data-table", 30 * 60_000, () =>
+        loadFootballDataTable(footballDataApiKey),
+      ).catch((error) => {
         console.error("[manutd] authenticated table provider failed", error);
         return [] as TableRowDTO[];
       })
     : Promise.resolve([] as TableRowDTO[]);
 
-  const [primary, espn, fallbackLive, fallbackResults, fallbackFixtures, primaryTable, fallbackTable, news] = await Promise.all([
+  const [
+    primary,
+    espn,
+    fallbackLive,
+    fallbackResults,
+    fallbackFixtures,
+    primaryTable,
+    fallbackTable,
+    news,
+  ] = await Promise.all([
     authenticatedMatches,
-    cached("espn-schedule", 2 * 60_000, loadEspnSchedule).catch(() => ({ live: null, results: [], fixtures: [] })),
+    cached("espn-schedule", 2 * 60_000, loadEspnSchedule).catch(() => ({
+      live: null,
+      results: [],
+      fixtures: [],
+    })),
     cached("live", 2 * 60_000, loadLive).catch(() => null),
     cached("results", 15 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
     cached("fixtures", 15 * 60_000, loadFixtures).catch(() => [] as MatchDTO[]),
@@ -521,7 +639,6 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
   const results = mergeMatches([espn.results, primary.results, fallbackResults]);
   const fixtures = mergeMatches([espn.fixtures, primary.fixtures, fallbackFixtures]);
   const table = primaryTable.length > 0 ? primaryTable : fallbackTable;
-
 
   const sortedResults = [...results].sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
@@ -568,7 +685,7 @@ const SEARCH_TOOLS = [
     function: {
       name: "search_web",
       description:
-        "Пребарај го интернетот во живо за актуелни факти (тековен клуб на играч, трансфери, тренер, повреди, резултати). Користи кратко прашање на англиски.",
+        "Комбинирано пребарување: најнови вести со датум, текст на најрелевантната вест и енциклопедиски податоци. Најдобра алатка за актуелни факти (тековен клуб на играч, трансфер, тренер, повреда, причина за неиграње). Прашање на англиски.",
       parameters: {
         type: "object",
         properties: { query: { type: "string", description: "Search query in English" } },
@@ -594,7 +711,8 @@ const SEARCH_TOOLS = [
     type: "function",
     function: {
       name: "wikipedia",
-      description: "Енциклопедиски податоци за играч, клуб или тренер. Име на англиски.",
+      description:
+        "Википедија: биографија и тековен клуб на играч, тренер или клуб. Точна за „каде игра сега“. Име на англиски.",
       parameters: {
         type: "object",
         properties: { query: { type: "string", description: "Page title in English" } },
@@ -622,36 +740,107 @@ export async function answerQuestion(
   extraContext?: string,
   footballDataApiKey?: string,
 ) {
-  let context = "";
+  /* Context is written as short Macedonian lines rather than dumped JSON. The
+     raw dump was large, and it taught the model to echo English club names
+     ("Manchester United FC") straight back into its answers. */
+  const lines: string[] = [];
   try {
     const snap = await getSnapshotData(footballDataApiKey);
-    context = JSON.stringify({
-      live: snap.live,
-      last: snap.last,
-      next: snap.next,
-      fixtures: snap.fixtures,
-      results: snap.results,
-      table: snap.table.slice(0, 20),
-      news: snap.news.map((n) => n.title),
-    });
+    const describe = (m: MatchDTO | null) =>
+      m
+        ? `${teamMk(m.home)} ${m.homeScore ?? "-"}:${m.awayScore ?? "-"} ${teamMk(m.away)} (${leagueMk(m.league)}, ${m.timestamp ?? "без датум"})`
+        : "нема податок";
+    if (snap.live)
+      lines.push(
+        `Во моментот се игра: ${describe(snap.live)}, минута ${snap.live.progress || "?"}.`,
+      );
+    lines.push(`Последен натпревар: ${describe(snap.last)}.`);
+    lines.push(`Следен натпревар: ${describe(snap.next)}.`);
+    if (snap.last?.scorers.length) {
+      lines.push(
+        `Стрелци на последниот натпревар: ${snap.last.scorers.map((g) => `${g.player} ${g.minute}`).join(", ")}.`,
+      );
+    }
+    if (snap.last?.lineups.length) {
+      for (const l of snap.last.lineups) {
+        lines.push(`Постава (${teamMk(l.team)}): ${l.starters.map((pl) => pl.name).join(", ")}.`);
+      }
+    }
+    const united = snap.table.find((r) => r.isUnited);
+    if (united) {
+      lines.push(
+        `Табела: Јунајтед е ${united.rank}. со ${united.points} бода од ${united.played} натпревари.`,
+      );
+    }
+    if (snap.fixtures.length) {
+      lines.push(
+        `Следни натпревари: ${snap.fixtures
+          .slice(0, 4)
+          .map(
+            (m) =>
+              `${teamMk(m.opponent)} (${m.isHome ? "дома" : "во гости"}, ${m.timestamp ?? "?"})`,
+          )
+          .join("; ")}.`,
+      );
+    }
+    if (snap.news.length)
+      lines.push(`Наслови од вестите: ${snap.news.map((n) => n.title).join(" | ")}.`);
   } catch (err) {
     console.error("[manutd] context load failed", err);
   }
 
+  // The squad is what makes selection questions answerable at all — without it,
+  // "why didn't Šeško play" has no factual basis and the model invents one.
+  if (footballDataApiKey) {
+    try {
+      const squad = await cached("football-data-squad", 12 * 60 * 60_000, () =>
+        loadFootballDataSquad(footballDataApiKey),
+      );
+      if (squad.coach) lines.push(`Тренер на Манчестер Јунајтед: ${squad.coach}.`);
+      if (squad.players.length) {
+        lines.push(
+          `Играчи во тековниот состав на Манчестер Јунајтед (ова е официјалниот список, верувај му): ${squad.players
+            .map((pl) => `${pl.name}${pl.shirt ? ` (${pl.shirt})` : ""}`)
+            .join(", ")}.`,
+        );
+      }
+    } catch (err) {
+      console.error("[manutd] squad load failed", err);
+    }
+  }
+
+  const context = lines.join("\n");
+
+  /* Grounding is no longer left to the model's discretion. The old prompt
+     demanded a search and then closed by telling it not to refuse when the data
+     was missing, which cancelled the instruction — that is how it confidently
+     placed Šeško at Arsenal while Wikipedia's first line said Manchester United.
+     Now one search always runs before the model speaks. */
+  let priorResearch = "";
+  try {
+    const found = await liveLookup(`Manchester United ${question}`);
+    priorResearch = JSON.stringify(found).slice(0, 7000);
+  } catch (err) {
+    console.error("[manutd] pre-search failed", err);
+  }
+
   const system = `Ти си пријателски помошник за постар навивач на Манчестер Јунајтед од Македонија.
 Правила:
-- Одговарај ИСКЛУЧИВО на македонски јазик, со кирилица.
+- Одговарај ИСКЛУЧИВО на македонски јазик, со кирилица. Имињата на клубовите пиши ги на македонски (Манчестер Јунајтед, Ливерпул, Арсенал).
 - Кратки, едноставни реченици. Најмногу 4-5 реченици. Без англиски изрази и без стручен жаргон.
 - Користи точна македонска фудбалска терминологија (натпревар, стартна постава, полувреме, судија, пенал, црвен картон, трансфер, повреда).
-- ТОЧНОСТА Е НАЈВАЖНА. Твоето внатрешно знаење е застарено. За СЕКОЕ прашање за играч, тренер, состав, трансфер, повреда, резултат, табела или било што актуелно, ЗАДОЛЖИТЕЛНО прво повикај ги алатките за пребарување (search_web, search_news, wikipedia) и одговарај само врз основа на најдените податоци.
-- Ако корисникот те исправи или побара да провериш повторно, направи НОВО пребарување со поинакви зборови пред да одговориш. Никогаш не повторувај стар одговор без проверка.
-- Ако податоците од пребарувањето се спротивни на тоа што мислиш дека знаеш, верувај им на пребаните податоци (тие се понови).
-- Ако по пребарувањето не најдеш сигурен податок, кажи искрено: „Не најдов сигурен податок за тоа.“ Никогаш не измислувај клуб, име или бројка.
-- Не одбивај да одговориш само затоа што нешто го нема во податоците подолу.
+- ТОЧНОСТА Е НАЈВАЖНА. Твоето внатрешно знаење за играчи, трансфери и тренери е ЗАСТАРЕНО и честопати погрешно. Никогаш не се потпирај на него.
+- Одговарај САМО врз основа на податоците подолу и на резултатите од алатките за пребарување. Ако тие не даваат одговор, повикај ги алатките (search_web, search_news, wikipedia) уште еднаш со поинакви зборови.
+- Ако по пребарувањето не најдеш сигурен податок, кажи точно: „Не најдов сигурен податок за тоа.“ Тоа е ПРАВИЛЕН одговор. Никогаш не измислувај клуб, име, бројка или причина.
+- Ако корисникот те исправи, направи НОВО пребарување со поинакви зборови пред да одговориш. Никогаш не повторувај стар одговор без проверка.
+- Ако податоците од пребарувањето се спротивни на тоа што мислиш дека знаеш, верувај им на пребаните податоци.
 - Денешен датум: ${new Date().toISOString().slice(0, 10)}.
-Тековни податоци за клубот (JSON): ${context || "нема достапни податоци"}${
-    extraContext ? `\n\n${extraContext}` : ""
-  }`;
+
+Тековни податоци за клубот:
+${context || "нема достапни податоци"}
+
+Резултати од автоматското пребарување за ова прашање:
+${priorResearch || "нема"}${extraContext ? `\n\n${extraContext}` : ""}`;
 
   const messages: AiMessage[] = [
     { role: "system", content: system },
@@ -660,7 +849,7 @@ export async function answerQuestion(
   ];
 
   for (let round = 0; round < 4; round++) {
-    const msg = await callAiRaw(messages, 900, SEARCH_TOOLS);
+    const msg = await callAiRaw(messages, 1600, SEARCH_TOOLS);
     const calls = msg.tool_calls ?? [];
     if (calls.length === 0) return msg.content ?? "";
     messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: calls });
@@ -668,7 +857,9 @@ export async function answerQuestion(
       calls.map(async (c) => {
         let query = "";
         try {
-          query = String((JSON.parse(c.function.arguments || "{}") as { query?: string }).query ?? "");
+          query = String(
+            (JSON.parse(c.function.arguments || "{}") as { query?: string }).query ?? "",
+          );
         } catch {
           query = "";
         }
@@ -686,10 +877,9 @@ export async function answerQuestion(
     }
   }
 
-  const final = await callAiRaw(messages, 900);
+  const final = await callAiRaw(messages, 1600);
   return final.content ?? "";
 }
-
 
 /* ---------- Full news article (Macedonian) ---------- */
 
@@ -714,7 +904,10 @@ export async function expandNewsArticle(item: {
     console.error("[manutd] article lookup failed", err);
   }
 
-  const today = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "Europe/Skopje" }).format(new Date());
+  const today = new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "long",
+    timeZone: "Europe/Skopje",
+  }).format(new Date());
 
   const content = await callAi(
     [

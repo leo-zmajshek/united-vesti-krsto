@@ -1,7 +1,19 @@
-/* Server-only live web lookup helpers used by the chat assistant. */
+/* Server-only live lookup helpers used by the chat assistant.
+
+   These deliberately avoid scraping search-engine HTML. The previous version
+   scraped html.duckduckgo.com, which now answers 202 with a JavaScript
+   challenge — the `result__a` class it looked for is gone, so every call
+   returned an empty array and the assistant was left answering from memory.
+   Both that endpoint and lite.duckduckgo.com were re-tested and are dead.
+
+   Everything below is either a documented JSON API or an RSS feed, so it fails
+   loudly rather than silently returning nothing. */
 
 function stripTags(s: string) {
-  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return s
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function decode(s: string) {
@@ -16,17 +28,23 @@ function decode(s: string) {
     .replace(/&amp;/g, "&");
 }
 
+const UA =
+  "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36";
+
 async function text(url: string, timeoutMs = 12_000) {
   const res = await fetch(url, {
     headers: {
-      "user-agent":
-        "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36",
+      "user-agent": UA,
       accept: "text/html,application/xhtml+xml,application/xml,application/json",
     },
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`${url} -> ${res.status}`);
   return res.text();
+}
+
+async function json<T>(url: string, timeoutMs = 12_000): Promise<T> {
+  return JSON.parse(await text(url, timeoutMs)) as T;
 }
 
 /** Recent news headlines about a topic (Google News RSS). */
@@ -42,48 +60,63 @@ export async function searchNews(query: string, limit = 8) {
         const m = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
         return m ? decode(stripTags(m[1]!.replace(/<!\[CDATA\[|\]\]>/g, ""))) : "";
       };
-      return { title: pick("title"), source: pick("source"), date: pick("pubDate") };
+      return {
+        title: pick("title"),
+        source: pick("source"),
+        date: pick("pubDate"),
+        link: pick("link"),
+      };
     })
     .filter((n) => n.title);
 }
 
-/** Wikipedia intro extract for the best matching page. */
+/** Wikipedia intro for the best matching page. REST summary first — it is short
+    and already plain text — with the action API as a fallback. */
 export async function wikiLookup(query: string) {
-  const searchJson = JSON.parse(
-    await text(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&srsearch=${encodeURIComponent(query)}`,
-    ),
-  ) as { query?: { search?: { title?: string }[] } };
+  const searchJson = await json<{ query?: { search?: { title?: string }[] } }>(
+    `https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&srsearch=${encodeURIComponent(query)}`,
+  );
   const title = searchJson.query?.search?.[0]?.title;
   if (!title) return null;
-  const extractJson = JSON.parse(
-    await text(
-      `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&redirects=1&format=json&titles=${encodeURIComponent(title)}`,
-    ),
-  ) as { query?: { pages?: Record<string, { extract?: string }> } };
+
+  try {
+    const summary = await json<{ extract?: string }>(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`,
+    );
+    if (summary.extract) return { title, extract: summary.extract.slice(0, 1800) };
+  } catch {
+    /* fall through to the action API */
+  }
+
+  const extractJson = await json<{ query?: { pages?: Record<string, { extract?: string }> } }>(
+    `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&redirects=1&format=json&titles=${encodeURIComponent(title)}`,
+  );
   const page = Object.values(extractJson.query?.pages ?? {})[0];
   const extract = (page?.extract ?? "").slice(0, 1800);
   return extract ? { title, extract } : null;
 }
 
-/** General web search (DuckDuckGo HTML endpoint). */
-export async function searchWeb(query: string, limit = 6) {
-  const html = await text(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-  const results: { title: string; snippet: string }[] = [];
-  const re = /<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) && results.length < limit) {
-    results.push({ title: decode(stripTags(m[1]!)), snippet: decode(stripTags(m[2]!)) });
-  }
-  return results;
+/** Encyclopedic multi-result lookup. Wikipedia's search API returns a snippet
+    per hit, which gives several independent passages instead of one page. */
+export async function searchWeb(query: string, limit = 5) {
+  const data = await json<{ query?: { search?: { title?: string; snippet?: string }[] } }>(
+    `https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=${limit}&format=json&srsearch=${encodeURIComponent(query)}`,
+  );
+  return (data.query?.search ?? [])
+    .map((r) => ({ title: r.title ?? "", snippet: decode(stripTags(r.snippet ?? "")) }))
+    .filter((r) => r.title);
 }
 
-/** Best-effort combined live lookup: never throws. */
+/** Best-effort combined live lookup: never throws.
+    Reading the linked article body was tried and dropped — Google News serves
+    redirect URLs and the r.jina.ai reader refuses news.google.com outright, so it
+    was a guaranteed empty string plus a 15s timeout on every question. The
+    headlines carry injury and selection news well enough on their own. */
 export async function liveLookup(query: string) {
   const [news, wiki, web] = await Promise.all([
-    searchNews(query).catch(() => []),
+    searchNews(query, 6).catch(() => []),
     wikiLookup(query).catch(() => null),
-    searchWeb(query).catch(() => []),
+    searchWeb(query, 4).catch(() => []),
   ]);
   return { query, news, wiki, web };
 }

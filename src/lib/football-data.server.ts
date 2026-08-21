@@ -80,7 +80,10 @@ export async function loadFootballDataMatches(apiKey: string): Promise<{
   const now = new Date();
   const from = new Date(now.getTime() - 120 * 24 * 60 * 60_000).toISOString().slice(0, 10);
   const to = new Date(now.getTime() + 180 * 24 * 60 * 60_000).toISOString().slice(0, 10);
-  const data = await request(`/teams/${UNITED_TEAM_ID}/matches?dateFrom=${from}&dateTo=${to}`, apiKey);
+  const data = await request(
+    `/teams/${UNITED_TEAM_ID}/matches?dateFrom=${from}&dateTo=${to}`,
+    apiKey,
+  );
   const results: MatchDTO[] = [];
   const fixtures: MatchDTO[] = [];
   let live: LiveDTO | null = null;
@@ -122,7 +125,28 @@ export async function loadFootballDataTable(apiKey: string): Promise<TableRowDTO
       goalsFor: number(entry["goalsFor"]) ?? 0,
       goalsAgainst: number(entry["goalsAgainst"]) ?? 0,
       points: number(entry["points"]) ?? 0,
-      isUnited: number(team["id"]) === UNITED_TEAM_ID || teamName.toLowerCase().includes("manchester united"),
+      isUnited:
+        number(team["id"]) === UNITED_TEAM_ID ||
+        teamName.toLowerCase().includes("manchester united"),
     };
   });
+}
+export type SquadDTO = {
+  coach: string;
+  players: { name: string; position: string; shirt: number | null }[];
+};
+
+/* The snapshot previously carried no players at all, so any question about
+   selection, injury or a specific footballer had nothing factual behind it and
+   the model improvised. /teams/{id} is on the same free tier as the fixtures. */
+export async function loadFootballDataSquad(apiKey: string): Promise<SquadDTO> {
+  const data = await request(`/teams/${UNITED_TEAM_ID}`, apiKey);
+  const players = array(data["squad"])
+    .map((p) => ({
+      name: string(p["name"]),
+      position: string(p["position"]),
+      shirt: number(p["shirtNumber"]),
+    }))
+    .filter((p) => p.name);
+  return { coach: string(record(data["coach"])["name"]), players };
 }
