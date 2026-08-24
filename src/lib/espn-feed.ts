@@ -3,6 +3,8 @@
    normally from a real browser and sends `Access-Control-Allow-Origin: *`,
    so the client can top up the server snapshot with cups, Europe and friendlies. */
 
+import { teamMk } from "./mk";
+
 import type { LiveDTO, MatchDTO, SnapshotDTO } from "./manutd.types";
 
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer";
@@ -36,9 +38,13 @@ function isUnited(name: string | null | undefined) {
 
 /* ---------- Merge helpers (shared with the server snapshot) ---------- */
 
+/* Keyed on the canonical Macedonian club name, not the raw string: providers
+   send "Hull City AFC", "Hull City" and "Man Utd" for the same clubs, and
+   comparing raw strings let the same fixture through twice. teamMk collapses
+   every spelling and alias onto one name. */
 export function matchKey(match: MatchDTO): string {
   const day = match.timestamp ? new Date(match.timestamp).toISOString().slice(0, 10) : "unknown";
-  const opponent = match.opponent.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const opponent = teamMk(match.opponent).trim().toLowerCase().replace(/\s+/g, "");
   return `${day}|${opponent}`;
 }
 
@@ -53,7 +59,11 @@ export function matchScore(match: MatchDTO): number {
   return score;
 }
 
-/** Merge match lists from all providers so every competition shows up, not just one provider's. */
+/** Merge match lists from all providers so every competition shows up, not just
+    one provider's. Lists must be passed in priority order: on an equal score the
+    earlier list wins, so the same fixture always renders the same way. Passing a
+    different order on the server than in the browser is what made a club's name
+    and badge change between visits. */
 export function mergeMatches(lists: MatchDTO[][]): MatchDTO[] {
   const byKey = new Map<string, MatchDTO>();
   for (const source of lists) {
@@ -143,7 +153,11 @@ export function parseEspnSchedule(data: unknown): {
     const status = record(record(competition["status"])["type"]);
     const state = text(status["state"]);
     if (state === "in") {
-      live = { ...match, progress: text(status["detail"]).replace(/[^0-9+]/g, ""), status: text(status["detail"]) };
+      live = {
+        ...match,
+        progress: text(status["detail"]).replace(/[^0-9+]/g, ""),
+        status: text(status["detail"]),
+      };
     } else if (state === "post") {
       results.push(match);
     } else {
@@ -198,20 +212,36 @@ async function getJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-/**
- * Fetch the full ESPN schedule from the browser and merge it into the
- * server snapshot, so competitions the server provider cannot see
- * (cups, Europe, friendlies) appear with scorers and lineups.
- */
-export async function enrichSnapshotWithEspn(snapshot: SnapshotDTO): Promise<SnapshotDTO> {
-  const espn = parseEspnSchedule(await getJson(`${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`));
+/** Fetch the raw ESPN schedule payload from the browser. Kept separate from the
+    merge so the caller can hold on to the payload and re-merge instantly when a
+    new server snapshot arrives, instead of leaving a gap while it re-fetches. */
+export async function fetchEspnSchedule(): Promise<unknown> {
+  return getJson(`${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`);
+}
 
-  const results = mergeMatches([snapshot.results, espn.results]).sort(
+/**
+ * Merge an already-fetched ESPN schedule into the server snapshot, so
+ * competitions the server provider cannot see (cups, Europe, friendlies) appear
+ * with scorers and lineups.
+ */
+export async function mergeEspnIntoSnapshot(
+  snapshot: SnapshotDTO,
+  espn: { live: LiveDTO | null; results: MatchDTO[]; fixtures: MatchDTO[] },
+): Promise<SnapshotDTO> {
+  // ESPN first, matching the server's priority order, so ties resolve the same way.
+  const results = mergeMatches([espn.results, snapshot.results]).sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
   );
-  const fixtures = mergeMatches([snapshot.fixtures, espn.fixtures]).sort(
-    (a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime(),
-  );
+  const merged = mergeMatches([espn.fixtures, snapshot.fixtures]);
+  // Same rule as the server: only genuinely future kickoffs may be "next".
+  const KICKOFF_GRACE_MS = 3 * 60 * 60_000;
+  const fixtures = merged
+    .filter((m) => {
+      if (!m.timestamp) return false;
+      const kickoff = new Date(m.timestamp).getTime();
+      return Number.isFinite(kickoff) && kickoff > Date.now() - KICKOFF_GRACE_MS;
+    })
+    .sort((a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime());
 
   const live = espn.live ?? snapshot.live;
   const last = results[0] ?? snapshot.last;
@@ -231,16 +261,14 @@ export async function enrichSnapshotWithEspn(snapshot: SnapshotDTO): Promise<Sna
 
   return {
     ...snapshot,
-    live: live ? ({ ...(detailed as LiveDTO), progress: live.progress, status: live.status }) : null,
+    live: live ? { ...(detailed as LiveDTO), progress: live.progress, status: live.status } : null,
     last: live ? last : (detailed as MatchDTO | null),
-    next: fixtures[0] ?? snapshot.next,
+    next: fixtures[0] ?? null,
     fixtures: fixtures.slice(0, 6),
     results: results.slice(0, 6),
-    form: results
-      .slice(0, 5)
-      .reverse()
-      .map((m) => m.outcome)
-      .filter((o): o is "win" | "draw" | "loss" => o != null),
-    availability: "fresh",
+    // Freshness belongs to the server, which knows whether its providers
+    // answered. Hard-coding "fresh" here overrode a "stale" verdict and meant
+    // the "showing last saved data" notice could never appear.
+    availability: snapshot.availability,
   };
 }

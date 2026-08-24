@@ -532,6 +532,71 @@ async function callAi(messages: { role: string; content: string }[], maxTokens =
   return msg.content ?? "";
 }
 
+/* Newer gateway models spend part of max_tokens on internal reasoning, so the
+   old 1200 ceiling could truncate the JSON array mid-way. A truncated reply
+   parsed as nothing, every headline silently fell back to its English original,
+   and the UI then mislabelled all of them as Serbian. */
+const NEWS_TRANSLATION_TOKENS = 3200;
+
+/* Models wrap JSON in ``` fences or add a sentence before it often enough that
+   a bare JSON.parse is not good enough. */
+function parseJsonArray(content: string): { title?: string; summary?: string }[] {
+  const cleaned = content
+    .replace(/```(?:json)?/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const candidates = [cleaned];
+  const first = cleaned.indexOf("[");
+  const last = cleaned.lastIndexOf("]");
+  if (first !== -1 && last > first) candidates.push(cleaned.slice(first, last + 1));
+  for (const candidate of candidates) {
+    try {
+      const value = JSON.parse(candidate) as unknown;
+      if (Array.isArray(value)) return value as { title?: string; summary?: string }[];
+      // Some replies wrap the array in an object, e.g. {"items":[...]}.
+      if (value && typeof value === "object") {
+        const inner = Object.values(value).find((v) => Array.isArray(v));
+        if (inner) return inner as { title?: string; summary?: string }[];
+      }
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return [];
+}
+
+/* Deterministic club-name pass. The prompt asks for Macedonian names, but models
+   drift and leave "Manchester United" mid-sentence; the table settles it.
+   Player names are left to the model, which knows that Carrick is "Керик" —
+   blind transliteration would render "Каррик" and trade one awkwardness for
+   another. */
+const CLUB_PATTERNS: Array<[RegExp, string]> = [
+  [/\bManchester United(?:\s+FC)?\b/g, "Манчестер Јунајтед"],
+  [/\bMan(?:chester)?\s+Utd\b/g, "Манчестер Јунајтед"],
+  [/\bMan United\b/g, "Манчестер Јунајтед"],
+  [/\bManchester City(?:\s+FC)?\b/g, "Манчестер Сити"],
+  [/\bOld Trafford\b/g, "Олд Трафорд"],
+  [/\bPremier League\b/g, "Премиер лига"],
+  [/\bChampions League\b/g, "Лигата на шампионите"],
+  [/\bEuropa League\b/g, "Лигата на Европа"],
+  [/\bHull(?:\s+City)?(?:\s+AFC)?\b/g, "Хал Сити"],
+  [/\bLiverpool(?:\s+FC)?\b/g, "Ливерпул"],
+  [/\bArsenal(?:\s+FC)?\b/g, "Арсенал"],
+  [/\bChelsea(?:\s+FC)?\b/g, "Челзи"],
+  [/\bTottenham(?:\s+Hotspur)?\b/g, "Тотенхем"],
+  [/\bEverton(?:\s+FC)?\b/g, "Евертон"],
+  [/\bNewcastle(?:\s+United)?\b/g, "Њукасл"],
+  [/\bLeeds(?:\s+United)?\b/g, "Лидс"],
+  [/\bAston Villa\b/g, "Астон Вила"],
+  [/\bWest Ham(?:\s+United)?\b/g, "Вест Хем"],
+];
+
+function cyrillicizeClubs(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of CLUB_PATTERNS) out = out.replace(pattern, replacement);
+  return out;
+}
+
 async function loadNews(): Promise<NewsItemDTO[]> {
   const primary = await loadRawNews().catch((error) => {
     console.error("[manutd] Google News unavailable, using fallback", error);
@@ -547,40 +612,45 @@ async function loadNews(): Promise<NewsItemDTO[]> {
   if (raw.length === 0) return [];
   const prompt = `Преведи ги следниве наслови на вести за Манчестер Јунајтед на македонски јазик.
 За секој наслов дај краток наслов (до 9 збора) и една проста реченица објаснување, со точна фудбалска терминологија на македонски (натпревар, стартна постава, трансфер, повреда, тренер, полувреме, пенал, црвен картон).
-Не преведувај буквално - пиши природно, како што би кажал спортски новинар. Имињата на играчите и клубовите остави ги во оригинал (латиница) само ако немаат вообичаен македонски запис.
-Врати ИСКЛУЧИВО JSON низа од објекти со полиња "title" и "summary", ист број и ист редослед како влезот.
+Не преведувај буквално - пиши природно, како што би кажал спортски новинар.
+ЗАДОЛЖИТЕЛНО: пиши СЀ на кирилица. Имињата на клубовите и играчите транскрибирај ги на македонски (Manchester United → Манчестер Јунајтед, Michael Carrick → Мајкл Керик, Hull → Хал, Rashford → Рашфорд). Никаква латиница во одговорот.
+Врати ИСКЛУЧИВО JSON низа од објекти со полиња "title" и "summary", ист број и ист редослед како влезот. Без коментари и без \`\`\` ознаки.
 
 Влез:
 ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
 
-  const content = await callAi([
-    {
-      role: "system",
-      content:
-        "Ти си спортски новинар кој пишува кратко и јасно на македонски јазик. Враќаш само валиден JSON.",
-    },
-    { role: "user", content: prompt },
-  ]);
-  const match = content.match(/\[[\s\S]*\]/);
-  let parsed: { title?: string; summary?: string }[] = [];
-  if (match) {
-    try {
-      parsed = JSON.parse(match[0]) as { title?: string; summary?: string }[];
-    } catch (err) {
-      console.error("[manutd] news JSON parse failed", err);
-    }
+  const content = await callAi(
+    [
+      {
+        role: "system",
+        content:
+          "Ти си спортски новинар кој пишува кратко и јасно на македонски јазик, само на кирилица. Враќаш само валиден JSON.",
+      },
+      { role: "user", content: prompt },
+    ],
+    NEWS_TRANSLATION_TOKENS,
+  );
+  const parsed = parseJsonArray(content);
+  if (parsed.length === 0) {
+    // Log what actually came back, so a future failure is diagnosable instead of
+    // silently degrading to English.
+    console.error(
+      `[manutd] news translation did not parse (${content.length} chars): ${content.slice(0, 400)}`,
+    );
   }
   return raw.slice(0, 6).map((n, i) => {
     const t = parsed[i];
-    const translated = Boolean(t?.title);
+    const title = t?.title ? cyrillicizeClubs(t.title) : "";
     return {
-      title: t?.title || n.title,
-      summary: t?.summary || "",
+      title: title || n.title,
+      summary: t?.summary ? cyrillicizeClubs(t.summary) : "",
       source: n.source,
       link: n.link,
       published: mkAgo(n.date),
       publishedAt: n.date ? n.date.toISOString() : "",
-      serbianOnly: !translated,
+      // A failed translation is a failed translation. It is not Serbian, and
+      // labelling it so put a Serbian flag on English text.
+      untranslated: !title,
     };
   });
 }
@@ -643,7 +713,18 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
   const sortedResults = [...results].sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
   );
-  const sortedFixtures = [...fixtures].sort(
+  /* DATA-2: a postponed fixture keeps its original date, and the query window
+     reaches 120 days back, so sorting fixtures ascending could put a match from
+     last spring at position 0 — displayed as "Следен натпревар" with a countdown
+     that had already run out. Only genuinely future kickoffs qualify.
+     A small grace window keeps a match visible while it is starting. */
+  const KICKOFF_GRACE_MS = 3 * 60 * 60_000;
+  const upcoming = fixtures.filter((m) => {
+    if (!m.timestamp) return false; // date not yet confirmed — hold it back
+    const kickoff = new Date(m.timestamp).getTime();
+    return Number.isFinite(kickoff) && kickoff > Date.now() - KICKOFF_GRACE_MS;
+  });
+  const sortedFixtures = [...upcoming].sort(
     (a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime(),
   );
 
@@ -666,11 +747,7 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
     fixtures: sortedFixtures.slice(0, 6),
     results: sortedResults.slice(0, 6),
     table,
-    form: sortedResults
-      .slice(0, 5)
-      .reverse()
-      .map((m) => m.outcome)
-      .filter((o): o is "win" | "draw" | "loss" => o != null),
+    tableIsPreseason: table.length > 0 && table.every((row) => row.played === 0),
     news,
     updatedAt: new Date().toISOString(),
     availability: hasCoreData ? "fresh" : "unavailable",

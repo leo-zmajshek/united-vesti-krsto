@@ -1,17 +1,11 @@
 import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card, Section, SectionHeading } from "./ui";
-import { OUTCOME_SHORT, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
+import { OUTCOME_SHORT, OUTCOME_WORD_MK, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
 
 const FORM_CLASS = {
   win: "bg-success text-success-foreground",
   draw: "bg-warning text-warning-foreground",
   loss: "bg-destructive text-destructive-foreground",
-} as const;
-
-const OUTCOME_WORD = {
-  win: "победа",
-  draw: "нерешено",
-  loss: "изгубено",
 } as const;
 
 export function NextMatchSection({ snapshot }: { snapshot: SnapshotDTO }) {
@@ -96,12 +90,12 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 <span className="font-bold text-foreground">{i + 1}*</span>{" "}
                 {m.isHome ? "Дома против " : "Во гости кај "}
                 {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
-                {OUTCOME_WORD[m.outcome!]}){m.league ? ` · ${leagueMk(m.league)}` : ""}
+                {OUTCOME_WORD_MK[m.outcome!]}){m.league ? ` · ${leagueMk(m.league)}` : ""}
               </li>
             ))}
           </ul>
           <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-            П = победа, Н = нерешено, И = изгубено
+            П = победа, Н = нерешено, З = загуба
           </p>
         </div>
       ) : null}
@@ -176,14 +170,22 @@ export function TableSection({ snapshot }: { snapshot: SnapshotDTO }) {
       <div className="mt-5 overflow-hidden rounded-2xl border-2 border-border bg-card">
         {snapshot.table.length === 0 ? (
           <p className="p-4 text-lg text-muted-foreground">Табелата моментално не е достапна.</p>
+        ) : snapshot.tableIsPreseason ? (
+          /* Before the first round every club sits on 0 points at position 1,
+             sorted alphabetically — twenty rows of zeros that read as broken.
+             Say so plainly instead. */
+          <p className="p-4 text-lg sm:text-xl">
+            Сезоната во Премиер лигата уште не е започната, па сите клубови имаат нула бодови.
+            Табелата ќе се појави по првото коло.
+          </p>
         ) : (
           <table className="w-full table-fixed text-base sm:text-lg">
             <thead>
               <tr className="bg-secondary text-secondary-foreground">
                 <th className="w-9 px-2 py-3 text-left font-bold">#</th>
                 <th className="px-2 py-3 text-left font-bold">Тим</th>
-                <th className="w-12 px-1 py-3 text-right font-bold">Од</th>
-                <th className="w-14 px-2 py-3 text-right font-bold">Бод</th>
+                <th className="w-24 px-1 py-3 text-right font-bold">Одиграни</th>
+                <th className="w-20 px-2 py-3 text-right font-bold">Бодови</th>
               </tr>
             </thead>
             <tbody>

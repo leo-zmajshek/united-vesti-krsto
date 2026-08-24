@@ -55,9 +55,9 @@ export type NewsItemDTO = {
   link: string;
   published: string;
   publishedAt: string;
-  serbianOnly: boolean;
+  /** Translation into Macedonian failed; the title below is still the original. */
+  untranslated: boolean;
 };
-
 
 export type SnapshotDTO = {
   live: LiveDTO | null;
@@ -66,9 +66,9 @@ export type SnapshotDTO = {
   fixtures: MatchDTO[];
   results: MatchDTO[];
   table: TableRowDTO[];
-  form: ("win" | "draw" | "loss")[];
+  /** Every row still on zero — the season has not kicked off yet. */
+  tableIsPreseason: boolean;
   news: NewsItemDTO[];
   updatedAt: string;
   availability: "fresh" | "stale" | "unavailable";
 };
-

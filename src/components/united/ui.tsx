@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 export function SectionHeading({ id, title, hint }: { id: string; title: string; hint?: string }) {
   return (
     <div id={id} className="scroll-mt-28 pt-2">
-      <h2 className="text-2xl font-black uppercase leading-tight tracking-tight text-foreground sm:text-4xl">{title}</h2>
+      <h2 className="text-2xl font-black uppercase leading-tight tracking-tight text-foreground sm:text-4xl">
+        {title}
+      </h2>
       <div className="mt-2 h-1.5 w-20 rounded-full bg-primary" />
       {hint ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{hint}</p> : null}
     </div>
@@ -11,7 +13,9 @@ export function SectionHeading({ id, title, hint }: { id: string; title: string;
 }
 
 export function Section({ children }: { children: ReactNode }) {
-  return <section className="border-t-4 border-border px-4 py-6 sm:px-6 sm:py-8">{children}</section>;
+  return (
+    <section className="border-t-4 border-border px-4 py-6 sm:px-6 sm:py-8">{children}</section>
+  );
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -50,15 +54,15 @@ export function Badge({ src, alt, size = 56 }: { src: string | null; alt: string
   );
 }
 
-export function SerbianFlagTag() {
+/* Was a Serbian flag reading "Dostupno samo na srpskom" — in Latin script, for a
+   reader who uses Cyrillic, and shown whenever the AI translation failed rather
+   than when a story was actually Serbian. So it announced Serbian on English
+   text. This states what is actually true instead. */
+export function UntranslatedTag() {
   return (
     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-base font-semibold text-secondary-foreground">
-      <svg viewBox="0 0 9 6" width="24" height="16" aria-hidden="true" className="rounded-[2px]">
-        <rect width="9" height="2" y="0" fill="#C6363C" />
-        <rect width="9" height="2" y="2" fill="#0C4076" />
-        <rect width="9" height="2" y="4" fill="#FFFFFF" />
-      </svg>
-      Dostupno samo na srpskom
+      <span aria-hidden="true">🌐</span>
+      Преводот не успеа — насловот е во оригинал
     </span>
   );
 }

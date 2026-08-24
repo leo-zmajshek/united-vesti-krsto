@@ -1,7 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import type { MatchDTO, SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card } from "./ui";
-import { OUTCOME_LABEL, countdown, formatDateTime, formatTime, hoursUntil, isToday, leagueMk, teamMk } from "@/lib/mk";
+import {
+  OUTCOME_LABEL,
+  countdown,
+  formatDateTime,
+  formatTime,
+  hoursUntil,
+  isToday,
+  leagueMk,
+  teamMk,
+} from "@/lib/mk";
 
 const OUTCOME_CLASS = {
   win: "bg-success text-success-foreground",
@@ -28,7 +37,9 @@ function ScoreLine({
     <div className="flex items-start justify-between gap-2">
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
         <Badge src={homeBadge} alt={home} size={52} />
-        <span className="text-base font-bold leading-tight break-words sm:text-xl">{teamMk(home)}</span>
+        <span className="text-base font-bold leading-tight break-words sm:text-xl">
+          {teamMk(home)}
+        </span>
       </div>
       <div className="shrink-0 pt-2 text-center">
         <div className="text-5xl font-black tabular-nums sm:text-7xl">
@@ -39,7 +50,9 @@ function ScoreLine({
       </div>
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
         <Badge src={awayBadge} alt={away} size={52} />
-        <span className="text-base font-bold leading-tight break-words sm:text-xl">{teamMk(away)}</span>
+        <span className="text-base font-bold leading-tight break-words sm:text-xl">
+          {teamMk(away)}
+        </span>
       </div>
     </div>
   );
@@ -75,7 +88,9 @@ function GoalItem({
   return (
     <li
       className={`flex w-[88%] items-baseline gap-2 rounded-lg bg-muted px-3 py-2 text-base leading-snug sm:text-lg ${
-        right ? "ml-auto flex-row-reverse border-r-4 border-primary text-right" : "mr-auto border-l-4 border-primary"
+        right
+          ? "ml-auto flex-row-reverse border-r-4 border-primary text-right"
+          : "mr-auto border-l-4 border-primary"
       }`}
     >
       <span aria-hidden="true">⚽</span>
@@ -93,10 +108,17 @@ function MatchDetails({ match }: { match: MatchDTO }) {
   const hasScorers = match.scorers.length > 0;
   const hasLineups = match.lineups.length > 0;
   if (!hasScorers && !hasLineups) {
-    return <p className="mt-5 text-center text-base text-muted-foreground sm:text-lg">Стрелците и составите сè уште не се достапни.</p>;
+    return (
+      <p className="mt-5 text-center text-base text-muted-foreground sm:text-lg">
+        Стрелците и составите сè уште не се достапни.
+      </p>
+    );
   }
 
-  const sides = match.scorers.map((goal) => ({ goal, side: goalSide(goal.team, match.home, match.away) }));
+  const sides = match.scorers.map((goal) => ({
+    goal,
+    side: goalSide(goal.team, match.home, match.away),
+  }));
 
   const homeLineup = match.lineups.find((l) => goalSide(l.team, match.home, match.away) === "home");
   const awayLineup = match.lineups.find((l) => l !== homeLineup);
@@ -127,15 +149,23 @@ function MatchDetails({ match }: { match: MatchDTO }) {
           <h2 className="text-center text-xl font-black sm:text-2xl">Стартни состави</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             {[homeLineup, awayLineup].filter(Boolean).map((lineup) => (
-              <div key={lineup!.team} className="rounded-xl border-l-4 border-primary bg-muted p-3 sm:p-4">
+              <div
+                key={lineup!.team}
+                className="rounded-xl border-l-4 border-primary bg-muted p-3 sm:p-4"
+              >
                 <h3 className="text-lg font-black break-words sm:text-xl">
                   {teamMk(lineup!.team)}
                   {lineup!.formation ? ` · ${lineup!.formation}` : ""}
                 </h3>
                 <ol className="mt-2 space-y-1 text-base sm:text-lg">
                   {lineup!.starters.map((player) => (
-                    <li key={`${lineup!.team}-${player.number}-${player.name}`} className="flex gap-2">
-                      <span className="w-7 shrink-0 font-bold tabular-nums text-muted-foreground">{player.number}</span>
+                    <li
+                      key={`${lineup!.team}-${player.number}-${player.name}`}
+                      className="flex gap-2"
+                    >
+                      <span className="w-7 shrink-0 font-bold tabular-nums text-muted-foreground">
+                        {player.number}
+                      </span>
                       <span className="min-w-0 break-words">{player.name}</span>
                     </li>
                   ))}
@@ -171,7 +201,9 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             homeScore={live.homeScore}
             awayScore={live.awayScore}
           />
-          <p className="mt-4 text-center text-lg text-muted-foreground sm:text-xl">{leagueMk(live.league)}</p>
+          <p className="mt-4 text-center text-lg text-muted-foreground sm:text-xl">
+            {leagueMk(live.league)}
+          </p>
           <MatchDetails match={live} />
         </Card>
       </div>
@@ -185,7 +217,9 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
       <div id="status" className="scroll-mt-32 px-4 py-6 sm:px-6">
         <Card className="border-primary">
           <p className="text-center text-xl font-black uppercase text-primary sm:text-2xl">
-            {isToday(next.timestamp) ? `Денес во ${formatTime(next.timestamp)}` : formatDateTime(next.timestamp)}
+            {isToday(next.timestamp)
+              ? `Денес во ${formatTime(next.timestamp)}`
+              : formatDateTime(next.timestamp)}
           </p>
           <div className="mt-4">
             <ScoreLine
@@ -247,7 +281,9 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
   return (
     <div id="status" className="scroll-mt-32 px-4 py-6 sm:px-6">
       <Card>
-        <p className="text-center text-2xl font-bold">Податоците за натпреварите моментално не се достапни.</p>
+        <p className="text-center text-2xl font-bold">
+          Податоците за натпреварите моментално не се достапни.
+        </p>
         <p className="mt-2 text-center text-xl text-muted-foreground">
           Пробајте повторно за неколку минути или{" "}
           <Link to="/chat" className="font-bold text-primary underline">

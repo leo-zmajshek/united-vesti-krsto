@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import type { NewsItemDTO, SnapshotDTO } from "@/lib/manutd.types";
-import { Card, Section, SectionHeading, SerbianFlagTag } from "./ui";
+import { Card, Section, SectionHeading, UntranslatedTag } from "./ui";
 import { askAboutNews, expandNews } from "@/lib/manutd.functions";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -71,7 +71,10 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
         { role: "assistant", content: res.error ? res.error : res.answer },
       ]);
     } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "Не успеав да одговорам. Пробајте повторно." }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: "Не успеав да одговорам. Пробајте повторно." },
+      ]);
     } finally {
       setAsking(false);
     }
@@ -79,7 +82,10 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
 
   return (
     <Card>
-      <h3 className="text-xl font-bold leading-snug break-words sm:text-2xl" suppressHydrationWarning>
+      <h3
+        className="text-xl font-bold leading-snug break-words sm:text-2xl"
+        suppressHydrationWarning
+      >
         {item.title}
       </h3>
       {item.summary ? (
@@ -92,8 +98,7 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
           {[item.source ? `Извор: ${item.source}` : "", item.published].filter(Boolean).join(" · ")}
         </p>
       ) : null}
-      {item.serbianOnly ? <SerbianFlagTag /> : null}
-
+      {item.untranslated ? <UntranslatedTag /> : null}
 
       <button
         type="button"
@@ -144,7 +149,9 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
         >
           <div className="flex max-h-[88dvh] w-full max-w-xl flex-col rounded-t-3xl border-2 border-border bg-card sm:rounded-3xl">
             <div className="flex items-start gap-3 border-b-2 border-border p-4">
-              <p className="min-w-0 flex-1 text-lg font-bold leading-snug break-words sm:text-xl">{item.title}</p>
+              <p className="min-w-0 flex-1 text-lg font-bold leading-snug break-words sm:text-xl">
+                {item.title}
+              </p>
               <button
                 type="button"
                 onClick={() => setChatOpen(false)}
@@ -169,7 +176,10 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
                       {m.content}
                     </p>
                   ) : (
-                    <p key={i} className="max-w-[95%] text-lg leading-relaxed text-foreground sm:text-xl">
+                    <p
+                      key={i}
+                      className="max-w-[95%] text-lg leading-relaxed text-foreground sm:text-xl"
+                    >
                       {m.content}
                     </p>
                   ),
@@ -178,7 +188,10 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
               {asking ? <p className="text-lg text-muted-foreground">Размислувам…</p> : null}
             </div>
 
-            <form onSubmit={onAsk} className="border-t-2 border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <form
+              onSubmit={onAsk}
+              className="border-t-2 border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            >
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
