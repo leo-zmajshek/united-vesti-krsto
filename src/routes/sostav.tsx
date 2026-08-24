@@ -63,6 +63,15 @@ function SquadShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
+}
+
 function PlayerRow({ player }: { player: SquadPlayerDTO }) {
   const details = [positionMk(player.position), agePhraseMk(player.age), countryMk(player.country)]
     .filter(Boolean)
@@ -70,10 +79,7 @@ function PlayerRow({ player }: { player: SquadPlayerDTO }) {
 
   return (
     <li className="flex items-center gap-4 border-t-2 border-border px-4 py-4 first:border-t-0 sm:px-5">
-      {/* Face plus number, not one or the other: the photo is what he recognises
-          at a glance, the number is what he matches against a lineup. Players
-          without a verified photo keep the plain number circle. */}
-      <div className="relative shrink-0">
+      <div className="shrink-0">
         {player.photo ? (
           <img
             src={player.photo}
@@ -88,27 +94,22 @@ function PlayerRow({ player }: { player: SquadPlayerDTO }) {
           />
         ) : (
           <span
-            className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-primary text-3xl font-black tabular-nums text-primary-foreground"
+            className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-muted text-2xl font-black text-muted-foreground"
             aria-hidden="true"
           >
-            {player.shirt ?? "–"}
+            {initials(player.name)}
           </span>
         )}
-        {player.photo && player.shirt != null ? (
-          <span
-            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-card bg-primary text-base font-black tabular-nums text-primary-foreground"
-            aria-hidden="true"
-          >
-            {player.shirt}
-          </span>
-        ) : null}
       </div>
       <div className="min-w-0">
-        {/* Player names keep the provider's Latin spelling — he reads it fine,
-            and transliterating gives wrong-looking Macedonian. */}
-        <p className="text-xl font-bold leading-tight break-words sm:text-2xl">
-          {player.shirt != null ? <span className="sr-only">Број {player.shirt}. </span> : null}
-          {player.name}
+        <p className="flex flex-wrap items-baseline gap-x-2 text-xl font-bold leading-tight sm:text-2xl">
+          {/* Shirt number in United red with a # so it reads as a number and not
+              part of the name. football-data does not supply these, so they are
+              filled in from ESPN's roster. */}
+          {player.shirt != null ? (
+            <span className="font-black tabular-nums text-primary">#{player.shirt}</span>
+          ) : null}
+          <span className="min-w-0 break-words">{player.name}</span>
         </p>
         <p className="mt-1 text-base text-muted-foreground sm:text-lg">{details}</p>
       </div>
@@ -141,7 +142,8 @@ function SquadPage() {
   return (
     <SquadShell>
       <p className="text-lg leading-relaxed sm:text-xl">
-        Целиот состав на Манчестер Јунајтед, поделен по позиции. Бројот е бројот на дресот.
+        Целиот состав на Манчестер Јунајтед, поделен по позиции. Црвениот број со # е бројот на
+        дресот.
       </p>
       {squad.coach ? (
         <div

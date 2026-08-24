@@ -692,13 +692,67 @@ async function loadEspnRoster(): Promise<SquadDTO> {
   return { coach: "", players };
 }
 
+/* Match a player across providers. football-data writes "Altay Bayındır", ESPN
+   "Altay Bayindir", so diacritics are folded; a last-name match is the fallback
+   for the cases where one provider uses a fuller name. */
+function playerKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function lastName(name: string): string {
+  const parts = playerKey(name).split(" ");
+  return parts[parts.length - 1] ?? "";
+}
+
+/* football-data's squad carries no shirtNumber (verified against the live
+   deployment: every player came back null, so the squad page showed no numbers
+   at all). ESPN's roster does carry them, so numbers are filled in from there. */
+async function fillShirtNumbers(squad: SquadDTO): Promise<SquadDTO> {
+  if (squad.players.every((p) => p.shirt != null)) return squad;
+  let roster: SquadDTO;
+  try {
+    roster = await cached("espn-roster", 12 * 60 * 60_000, loadEspnRoster);
+  } catch (error) {
+    console.error("[manutd] shirt numbers unavailable", error);
+    return squad;
+  }
+
+  const byName = new Map<string, number>();
+  const bySurname = new Map<string, number>();
+  for (const p of roster.players) {
+    if (p.shirt == null) continue;
+    byName.set(playerKey(p.name), p.shirt);
+    const surname = lastName(p.name);
+    // Only trust a surname match when it is unambiguous within the roster.
+    if (bySurname.has(surname)) bySurname.set(surname, -1);
+    else bySurname.set(surname, p.shirt);
+  }
+
+  return {
+    ...squad,
+    players: squad.players.map((p) => {
+      if (p.shirt != null) return p;
+      const exact = byName.get(playerKey(p.name));
+      if (exact != null) return { ...p, shirt: exact };
+      const surname = bySurname.get(lastName(p.name));
+      return surname != null && surname > 0 ? { ...p, shirt: surname } : p;
+    }),
+  };
+}
+
 export async function getSquadData(footballDataApiKey?: string): Promise<SquadDTO> {
   return cached("squad", 12 * 60 * 60_000, async () => {
     let squad: SquadDTO = { coach: "", players: [] };
     if (footballDataApiKey) {
       try {
         const primary = await loadFootballDataSquad(footballDataApiKey);
-        if (primary.players.length > 0) squad = primary;
+        if (primary.players.length > 0) squad = await fillShirtNumbers(primary);
       } catch (error) {
         console.error("[manutd] football-data squad failed, trying ESPN", error);
       }
@@ -707,8 +761,16 @@ export async function getSquadData(footballDataApiKey?: string): Promise<SquadDT
 
     // Photos are a separate, longer-lived cache: they change far less often than
     // the squad, and a photo failure must never cost us the squad itself.
-    const photos = await cached("player-photos", 7 * 24 * 60 * 60_000, () =>
-      loadPlayerPhotos(squad.players.map((p) => p.name)),
+    // Keyed on the roster itself, not a fixed string: during a transfer window a
+    // new signing would otherwise show no photo until the 7-day TTL expired.
+    const rosterKey = squad.players
+      .map((p) => p.name)
+      .sort()
+      .join("|");
+    const photos = await cached(
+      `player-photos:${rosterKey.length}:${rosterKey.slice(0, 120)}`,
+      7 * 24 * 60 * 60_000,
+      () => loadPlayerPhotos(squad.players.map((p) => p.name)),
     ).catch(() => ({}) as Record<string, string>);
 
     return {
