@@ -17,6 +17,7 @@ import {
 import { mergeMatches } from "./espn-feed";
 import { teamMk, leagueMk } from "./mk";
 import { loadPlayerPhotos } from "./photos.server";
+import { loadOfficialSquad } from "./manutd-site.server";
 
 import type {
   MatchDTO,
@@ -748,35 +749,71 @@ async function fillShirtNumbers(squad: SquadDTO): Promise<SquadDTO> {
 
 export async function getSquadData(footballDataApiKey?: string): Promise<SquadDTO> {
   return cached("squad", 12 * 60 * 60_000, async () => {
-    let squad: SquadDTO = { coach: "", players: [] };
+    /* Two kinds of source, each authoritative for different fields.
+
+       The club's own page has the real first-team list, the squad numbers and
+       official photos — none of which the data providers get right. What it does
+       not publish is age or nationality, so a provider fills those in. If the
+       club page is unreachable or restructured we fall back entirely to the
+       providers, which is how this worked before. */
+    let provider: SquadDTO = { coach: "", players: [] };
     if (footballDataApiKey) {
       try {
-        const primary = await loadFootballDataSquad(footballDataApiKey);
-        if (primary.players.length > 0) squad = await fillShirtNumbers(primary);
+        provider = await loadFootballDataSquad(footballDataApiKey);
       } catch (error) {
-        console.error("[manutd] football-data squad failed, trying ESPN", error);
+        console.error("[manutd] football-data squad failed", error);
       }
     }
-    if (squad.players.length === 0) squad = await loadEspnRoster();
+    if (provider.players.length === 0) {
+      try {
+        provider = await loadEspnRoster();
+      } catch (error) {
+        console.error("[manutd] ESPN roster failed", error);
+      }
+    }
 
-    // Photos are a separate, longer-lived cache: they change far less often than
-    // the squad, and a photo failure must never cost us the squad itself.
-    // Keyed on the roster itself, not a fixed string: during a transfer window a
-    // new signing would otherwise show no photo until the 7-day TTL expired.
-    const rosterKey = squad.players
-      .map((p) => p.name)
-      .sort()
-      .join("|");
-    const photos = await cached(
-      `player-photos:${rosterKey.length}:${rosterKey.slice(0, 120)}`,
-      7 * 24 * 60 * 60_000,
-      () => loadPlayerPhotos(squad.players.map((p) => p.name)),
-    ).catch(() => ({}) as Record<string, string>);
+    const official = await cached("official-squad", 12 * 60 * 60_000, loadOfficialSquad).catch(
+      () => ({ coach: "", players: [] }) as SquadDTO,
+    );
 
-    return {
-      ...squad,
-      players: squad.players.map((p) => ({ ...p, photo: photos[p.name] ?? null })),
-    };
+    let squad: SquadDTO;
+    if (official.players.length > 0) {
+      const byName = new Map<string, SquadPlayerDTO>();
+      const bySurname = new Map<string, SquadPlayerDTO | null>();
+      for (const p of provider.players) {
+        byName.set(playerKey(p.name), p);
+        const surname = lastName(p.name);
+        // null marks an ambiguous surname, which must not be trusted.
+        bySurname.set(surname, bySurname.has(surname) ? null : p);
+      }
+      squad = {
+        coach: provider.coach,
+        players: official.players.map((p) => {
+          const match = byName.get(playerKey(p.name)) ?? bySurname.get(lastName(p.name)) ?? null;
+          return { ...p, age: match?.age ?? null, country: match?.country ?? "" };
+        }),
+      };
+    } else {
+      squad = await fillShirtNumbers(provider);
+    }
+
+    // Wikipedia is now only a gap-filler for players the club page has no photo
+    // for, which also means far fewer lookups.
+    const needPhotos = squad.players.filter((p) => !p.photo).map((p) => p.name);
+    if (needPhotos.length > 0) {
+      const key = needPhotos.slice().sort().join("|");
+      const photos = await cached(
+        `player-photos:${key.length}:${key.slice(0, 120)}`,
+        7 * 24 * 60 * 60_000,
+        () => loadPlayerPhotos(needPhotos),
+      ).catch(() => ({}) as Record<string, string>);
+      squad = {
+        ...squad,
+        players: squad.players.map((p) => (p.photo ? p : { ...p, photo: photos[p.name] ?? null })),
+      };
+    }
+
+    return squad;
   });
 }
 
