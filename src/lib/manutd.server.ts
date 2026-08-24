@@ -16,6 +16,7 @@ import {
 } from "./football-data.server";
 import { mergeMatches } from "./espn-feed";
 import { teamMk, leagueMk } from "./mk";
+import { loadPlayerPhotos } from "./photos.server";
 
 import type {
   MatchDTO,
@@ -684,6 +685,7 @@ async function loadEspnRoster(): Promise<SquadDTO> {
       shirt: numberOrNull(a["jersey"]),
       age: numberOrNull(a["age"]),
       country: text(a["citizenship"]),
+      photo: null as string | null,
     }))
     .filter((p) => p.name);
   // ESPN's team `coach` field returns historical managers, so it is not used.
@@ -692,15 +694,27 @@ async function loadEspnRoster(): Promise<SquadDTO> {
 
 export async function getSquadData(footballDataApiKey?: string): Promise<SquadDTO> {
   return cached("squad", 12 * 60 * 60_000, async () => {
+    let squad: SquadDTO = { coach: "", players: [] };
     if (footballDataApiKey) {
       try {
-        const squad = await loadFootballDataSquad(footballDataApiKey);
-        if (squad.players.length > 0) return squad;
+        const primary = await loadFootballDataSquad(footballDataApiKey);
+        if (primary.players.length > 0) squad = primary;
       } catch (error) {
         console.error("[manutd] football-data squad failed, trying ESPN", error);
       }
     }
-    return loadEspnRoster();
+    if (squad.players.length === 0) squad = await loadEspnRoster();
+
+    // Photos are a separate, longer-lived cache: they change far less often than
+    // the squad, and a photo failure must never cost us the squad itself.
+    const photos = await cached("player-photos", 7 * 24 * 60 * 60_000, () =>
+      loadPlayerPhotos(squad.players.map((p) => p.name)),
+    ).catch(() => ({}) as Record<string, string>);
+
+    return {
+      ...squad,
+      players: squad.players.map((p) => ({ ...p, photo: photos[p.name] ?? null })),
+    };
   });
 }
 

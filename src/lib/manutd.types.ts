@@ -84,6 +84,8 @@ export type SquadPlayerDTO = {
   shirt: number | null;
   age: number | null;
   country: string;
+  /** Small headshot URL, or null when no verified photo exists. */
+  photo: string | null;
 };
 
 export type SquadDTO = {

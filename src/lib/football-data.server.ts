@@ -175,6 +175,7 @@ export async function loadFootballDataSquad(apiKey: string): Promise<SquadDTO> {
       shirt: number(p["shirtNumber"]),
       age: ageFromDateOfBirth(string(p["dateOfBirth"])),
       country: string(p["nationality"]),
+      photo: null as string | null,
     }))
     .filter((p) => p.name);
   return { coach: string(record(data["coach"])["name"]), players };

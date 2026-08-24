@@ -70,17 +70,46 @@ function PlayerRow({ player }: { player: SquadPlayerDTO }) {
 
   return (
     <li className="flex items-center gap-4 border-t-2 border-border px-4 py-4 first:border-t-0 sm:px-5">
-      {/* The shirt number is the thing he can match against a lineup sheet. */}
-      <span
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-2xl font-black tabular-nums text-primary-foreground sm:h-16 sm:w-16 sm:text-3xl"
-        aria-hidden={player.shirt == null}
-      >
-        {player.shirt ?? "–"}
-      </span>
+      {/* Face plus number, not one or the other: the photo is what he recognises
+          at a glance, the number is what he matches against a lineup. Players
+          without a verified photo keep the plain number circle. */}
+      <div className="relative shrink-0">
+        {player.photo ? (
+          <img
+            src={player.photo}
+            alt={player.name}
+            width={72}
+            height={72}
+            loading="lazy"
+            decoding="async"
+            /* Wikipedia headshots are portrait, so anchor the crop to the top
+               to keep the face in frame rather than centring on the chest. */
+            className="h-[72px] w-[72px] rounded-full border-2 border-border bg-muted object-cover [object-position:50%_15%]"
+          />
+        ) : (
+          <span
+            className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-primary text-3xl font-black tabular-nums text-primary-foreground"
+            aria-hidden="true"
+          >
+            {player.shirt ?? "–"}
+          </span>
+        )}
+        {player.photo && player.shirt != null ? (
+          <span
+            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-card bg-primary text-base font-black tabular-nums text-primary-foreground"
+            aria-hidden="true"
+          >
+            {player.shirt}
+          </span>
+        ) : null}
+      </div>
       <div className="min-w-0">
         {/* Player names keep the provider's Latin spelling — he reads it fine,
             and transliterating gives wrong-looking Macedonian. */}
-        <p className="text-xl font-bold leading-tight break-words sm:text-2xl">{player.name}</p>
+        <p className="text-xl font-bold leading-tight break-words sm:text-2xl">
+          {player.shirt != null ? <span className="sr-only">Број {player.shirt}. </span> : null}
+          {player.name}
+        </p>
         <p className="mt-1 text-base text-muted-foreground sm:text-lg">{details}</p>
       </div>
     </li>
@@ -143,7 +172,11 @@ function SquadPage() {
         </section>
       ))}
 
-      <div className="mt-8">
+      <p className="mt-8 text-base text-muted-foreground sm:text-lg">
+        Фотографиите се од Википедија. За некои играчи нема слика, па стои само бројот на дресот.
+      </p>
+
+      <div className="mt-6">
         <Link
           to="/"
           className="block rounded-2xl bg-primary px-5 py-5 text-center text-xl font-black text-primary-foreground sm:text-2xl"
