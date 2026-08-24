@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getSnapshotData, answerQuestion, expandNewsArticle } from "./manutd.server";
+import { getSnapshotData, answerQuestion, expandNewsArticle, getSquadData } from "./manutd.server";
 
 /* Distinct causes need distinct wording: a spent AI credit grant is not the same
    as a rate limit, and telling Krsto to "try again" when the month's grant is
@@ -13,6 +13,10 @@ function aiErrorMk(err: unknown): string {
 
 export const getSnapshot = createServerFn({ method: "GET" }).handler(async () => {
   return getSnapshotData(process.env["FOOTBALL_DATA_API_KEY"]);
+});
+
+export const getSquad = createServerFn({ method: "GET" }).handler(async () => {
+  return getSquadData(process.env["FOOTBALL_DATA_API_KEY"]);
 });
 
 export const askUnited = createServerFn({ method: "POST" })

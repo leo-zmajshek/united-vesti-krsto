@@ -12,13 +12,22 @@ import {
   loadFootballDataMatches,
   loadFootballDataTable,
   loadFootballDataSquad,
+  normalizeSquadPosition,
 } from "./football-data.server";
 import { mergeMatches } from "./espn-feed";
 import { teamMk, leagueMk } from "./mk";
 
-import type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO } from "./manutd.types";
+import type {
+  MatchDTO,
+  LiveDTO,
+  TableRowDTO,
+  NewsItemDTO,
+  SnapshotDTO,
+  SquadDTO,
+  SquadPlayerDTO,
+} from "./manutd.types";
 
-export type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO };
+export type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO, SquadDTO };
 
 type CacheEntry = { value: unknown; expires: number };
 const cache = new Map<string, CacheEntry>();
@@ -655,6 +664,46 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
   });
 }
 
+/* ---------- Squad ---------- */
+
+/* Same shape from either provider, so the page renders identically whichever
+   answered. ESPN needs no key, which also makes the page testable locally, and
+   it goes through the hardened getJson above that works around ESPN blocking
+   datacenter IPs. */
+async function loadEspnRoster(): Promise<SquadDTO> {
+  const data = await getJson<EspnRecord>(`${ESPN}/eng.1/teams/${ESPN_TEAM_ID}/roster`);
+  const groups = list(data["athletes"]);
+  // ESPN either returns a flat list or groups it by position.
+  const athletes = groups.some((g) => Array.isArray(g["items"]))
+    ? groups.flatMap((g) => list(g["items"]))
+    : groups;
+  const players: SquadPlayerDTO[] = athletes
+    .map((a) => ({
+      name: text(a["displayName"]) || text(a["fullName"]),
+      position: normalizeSquadPosition(text(record(a["position"])["displayName"])),
+      shirt: numberOrNull(a["jersey"]),
+      age: numberOrNull(a["age"]),
+      country: text(a["citizenship"]),
+    }))
+    .filter((p) => p.name);
+  // ESPN's team `coach` field returns historical managers, so it is not used.
+  return { coach: "", players };
+}
+
+export async function getSquadData(footballDataApiKey?: string): Promise<SquadDTO> {
+  return cached("squad", 12 * 60 * 60_000, async () => {
+    if (footballDataApiKey) {
+      try {
+        const squad = await loadFootballDataSquad(footballDataApiKey);
+        if (squad.players.length > 0) return squad;
+      } catch (error) {
+        console.error("[manutd] football-data squad failed, trying ESPN", error);
+      }
+    }
+    return loadEspnRoster();
+  });
+}
+
 /* ---------- Snapshot ---------- */
 
 /* matchKey / matchScore / mergeMatches live in ./espn-feed (shared with the browser top-up). */
@@ -868,22 +917,18 @@ export async function answerQuestion(
 
   // The squad is what makes selection questions answerable at all — without it,
   // "why didn't Šeško play" has no factual basis and the model invents one.
-  if (footballDataApiKey) {
-    try {
-      const squad = await cached("football-data-squad", 12 * 60 * 60_000, () =>
-        loadFootballDataSquad(footballDataApiKey),
+  try {
+    const squad = await getSquadData(footballDataApiKey);
+    if (squad.coach) lines.push(`Тренер на Манчестер Јунајтед: ${squad.coach}.`);
+    if (squad.players.length) {
+      lines.push(
+        `Играчи во тековниот состав на Манчестер Јунајтед (ова е официјалниот список, верувај му): ${squad.players
+          .map((pl) => `${pl.name}${pl.shirt ? ` (${pl.shirt})` : ""}`)
+          .join(", ")}.`,
       );
-      if (squad.coach) lines.push(`Тренер на Манчестер Јунајтед: ${squad.coach}.`);
-      if (squad.players.length) {
-        lines.push(
-          `Играчи во тековниот состав на Манчестер Јунајтед (ова е официјалниот список, верувај му): ${squad.players
-            .map((pl) => `${pl.name}${pl.shirt ? ` (${pl.shirt})` : ""}`)
-            .join(", ")}.`,
-        );
-      }
-    } catch (err) {
-      console.error("[manutd] squad load failed", err);
     }
+  } catch (err) {
+    console.error("[manutd] squad load failed", err);
   }
 
   const context = lines.join("\n");

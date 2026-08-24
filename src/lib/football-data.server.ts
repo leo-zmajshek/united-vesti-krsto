@@ -1,4 +1,11 @@
-import type { LiveDTO, MatchDTO, TableRowDTO } from "./manutd.types";
+import type {
+  LiveDTO,
+  MatchDTO,
+  SquadDTO,
+  SquadPlayerDTO,
+  SquadPositionDTO,
+  TableRowDTO,
+} from "./manutd.types";
 
 const BASE_URL = "https://api.football-data.org/v4";
 const UNITED_TEAM_ID = 66;
@@ -131,21 +138,43 @@ export async function loadFootballDataTable(apiKey: string): Promise<TableRowDTO
     };
   });
 }
-export type SquadDTO = {
-  coach: string;
-  players: { name: string; position: string; shirt: number | null }[];
-};
+/* Provider position vocabularies differ: football-data says Defence/Midfield/
+   Offence, ESPN says Defender/Midfielder/Forward. Normalise so the page can
+   group players the way a fan thinks about a squad. */
+export function normalizeSquadPosition(raw: string): SquadPositionDTO {
+  const p = raw.toLowerCase();
+  if (p.includes("goal")) return "goalkeeper";
+  if (p.includes("defen") || p.includes("back")) return "defender";
+  if (p.includes("midfield")) return "midfielder";
+  if (p.includes("offen") || p.includes("forward") || p.includes("attack") || p.includes("wing"))
+    return "forward";
+  return "unknown";
+}
+
+export function ageFromDateOfBirth(iso: string): number | null {
+  if (!iso) return null;
+  const born = new Date(iso);
+  if (Number.isNaN(born.getTime())) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - born.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - born.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < born.getUTCDate())) age -= 1;
+  return age >= 14 && age <= 60 ? age : null;
+}
 
 /* The snapshot previously carried no players at all, so any question about
    selection, injury or a specific footballer had nothing factual behind it and
-   the model improvised. /teams/{id} is on the same free tier as the fixtures. */
+   the model improvised. /teams/{id} is on the same free tier as the fixtures,
+   and it also backs the squad page. */
 export async function loadFootballDataSquad(apiKey: string): Promise<SquadDTO> {
   const data = await request(`/teams/${UNITED_TEAM_ID}`, apiKey);
   const players = array(data["squad"])
     .map((p) => ({
       name: string(p["name"]),
-      position: string(p["position"]),
+      position: normalizeSquadPosition(string(p["position"])),
       shirt: number(p["shirtNumber"]),
+      age: ageFromDateOfBirth(string(p["dateOfBirth"])),
+      country: string(p["nationality"]),
     }))
     .filter((p) => p.name);
   return { coach: string(record(data["coach"])["name"]), players };

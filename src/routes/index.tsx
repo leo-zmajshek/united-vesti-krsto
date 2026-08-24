@@ -144,6 +144,14 @@ function Home() {
           ))}
           <li className="shrink-0">
             <Link
+              to="/sostav"
+              className="block rounded-xl bg-secondary px-4 py-3 text-base font-bold text-secondary-foreground sm:text-lg"
+            >
+              Играчи
+            </Link>
+          </li>
+          <li className="shrink-0">
+            <Link
               to="/chat"
               className="block rounded-xl bg-primary px-4 py-3 text-base font-bold text-primary-foreground sm:text-lg"
             >

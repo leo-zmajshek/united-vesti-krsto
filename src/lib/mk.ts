@@ -390,3 +390,84 @@ export function leagueMk(name: string): string {
   }
   return name;
 }
+
+/* ---------- Squad page labels ---------- */
+
+export const POSITION_GROUPS_MK = [
+  { key: "goalkeeper", title: "Голмани", one: "Голман" },
+  { key: "defender", title: "Одбрана", one: "Одбранбен играч" },
+  { key: "midfielder", title: "Средина", one: "Среден играч" },
+  { key: "forward", title: "Напад", one: "Напаѓач" },
+  { key: "unknown", title: "Останати", one: "Играч" },
+] as const;
+
+export function positionMk(position: string): string {
+  return POSITION_GROUPS_MK.find((g) => g.key === position)?.one ?? "Играч";
+}
+
+/* Nationalities as the providers spell them, in Macedonian. An unlisted country
+   falls back to the original — a country name in Latin is acceptable, and a
+   wrong transliteration would be worse. */
+const COUNTRIES_MK: Record<string, string> = {
+  england: "Англија",
+  scotland: "Шкотска",
+  wales: "Велс",
+  "northern ireland": "Северна Ирска",
+  ireland: "Ирска",
+  "republic of ireland": "Ирска",
+  france: "Франција",
+  portugal: "Португалија",
+  spain: "Шпанија",
+  brazil: "Бразил",
+  argentina: "Аргентина",
+  uruguay: "Уругвај",
+  netherlands: "Холандија",
+  belgium: "Белгија",
+  denmark: "Данска",
+  sweden: "Шведска",
+  norway: "Норвешка",
+  germany: "Германија",
+  italy: "Италија",
+  slovenia: "Словенија",
+  croatia: "Хрватска",
+  serbia: "Србија",
+  "north macedonia": "Северна Македонија",
+  morocco: "Мароко",
+  cameroon: "Камерун",
+  "ivory coast": "Брегот на Слоновата Коска",
+  "cote d'ivoire": "Брегот на Слоновата Коска",
+  nigeria: "Нигерија",
+  ghana: "Гана",
+  senegal: "Сенегал",
+  algeria: "Алжир",
+  egypt: "Египет",
+  turkey: "Турција",
+  greece: "Грција",
+  poland: "Полска",
+  ukraine: "Украина",
+  switzerland: "Швајцарија",
+  austria: "Австрија",
+  "united states": "САД",
+  usa: "САД",
+  canada: "Канада",
+  mexico: "Мексико",
+  colombia: "Колумбија",
+  paraguay: "Парагвај",
+  chile: "Чиле",
+  japan: "Јапонија",
+  "south korea": "Јужна Кореја",
+  australia: "Австралија",
+};
+
+export function countryMk(name: string): string {
+  if (!name) return "";
+  return COUNTRIES_MK[name.trim().toLowerCase()] ?? name;
+}
+
+export function agePhraseMk(age: number | null): string {
+  if (age == null) return "";
+  // Macedonian takes the singular after any number ending in 1, except 11:
+  // "21 година", but "11 години".
+  const singular = age % 10 === 1 && age % 100 !== 11;
+  return `${age} ${singular ? "година" : "години"}`;
+}

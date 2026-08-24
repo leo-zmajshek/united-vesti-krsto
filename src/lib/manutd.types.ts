@@ -72,3 +72,21 @@ export type SnapshotDTO = {
   updatedAt: string;
   availability: "fresh" | "stale" | "unavailable";
 };
+
+/* Squad page. Deliberately static basics — no live stats, no per-match numbers.
+   Fields are limited to what BOTH providers can supply, so the page looks the
+   same whether football-data or the ESPN fallback answered. */
+export type SquadPositionDTO = "goalkeeper" | "defender" | "midfielder" | "forward" | "unknown";
+
+export type SquadPlayerDTO = {
+  name: string;
+  position: SquadPositionDTO;
+  shirt: number | null;
+  age: number | null;
+  country: string;
+};
+
+export type SquadDTO = {
+  coach: string;
+  players: SquadPlayerDTO[];
+};
