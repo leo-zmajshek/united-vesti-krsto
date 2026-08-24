@@ -1,13 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { getSnapshot } from "@/lib/manutd.functions";
 import { StatusBlock } from "@/components/united/StatusBlock";
 import { NextMatchSection, ScheduleSection, TableSection } from "@/components/united/Sections";
 import { NewsSection } from "@/components/united/NewsSection";
 import { GreetingCard } from "@/components/united/GreetingCard";
-import { HelpCard } from "@/components/united/HelpCard";
-import { NAV_SECTION_IDS, pickActiveSection, type NavSection } from "@/lib/nav-sections";
+import { TopNav } from "@/components/united/TopNav";
 
 const snapshotQuery = queryOptions({
   queryKey: ["united-snapshot"],
@@ -57,92 +56,9 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-/* The first button used to always read "Во живо", promising a live match that
-   usually is not on. It now names whatever the status block is actually showing.
-   Ids are shared with the scroll-spy below so the two cannot drift apart. */
-function navFor(isLive: boolean) {
-  return [
-    { id: "status", label: isLive ? "Во живо" : "Резултат" },
-    { id: "schedule", label: "Распоред" },
-    { id: "table", label: "Табела" },
-    { id: "news", label: "Вести" },
-  ];
-}
-
-/* Which section is he actually looking at. A plain scroll read beats
-   IntersectionObserver here: the sections have very different heights and the
-   last one is shorter than the viewport, so "which section has passed under the
-   nav" is both simpler and more predictable than band intersection. */
-function useActiveSection(navListRef: React.RefObject<HTMLUListElement | null>) {
-  const [active, setActive] = useState<string>(NAV_SECTION_IDS[0]);
-
-  useEffect(() => {
-    const update = () => {
-      const list = navListRef.current;
-      // Measure the sticky nav rather than hardcoding its height, which changes
-      // with the phone's font-size setting.
-      const line = (list ? list.getBoundingClientRect().bottom : 0) + 12;
-      const sections: NavSection[] = [];
-      for (const id of NAV_SECTION_IDS) {
-        const el = document.getElementById(id);
-        if (el) sections.push({ id, top: el.getBoundingClientRect().top });
-      }
-      // The final section is shorter than the viewport, so its top never crosses
-      // the line; reaching the bottom of the page counts as reaching it.
-      const atBottom =
-        window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4;
-      setActive(pickActiveSection(sections, line, atBottom));
-    };
-
-    /* Measured straight from the scroll handler rather than coalesced through
-       requestAnimationFrame. Four read-only getBoundingClientRect calls are
-       cheap, React skips the render when the section has not changed, and rAF is
-       paused whenever the page is not being rendered — which made this
-       impossible to test and added a failure mode for no real gain. */
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    // Android can restore a backgrounded install at a scroll position we never
-    // observed, so re-measure when the page comes back.
-    document.addEventListener("visibilitychange", update);
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-      document.removeEventListener("visibilitychange", update);
-    };
-  }, [navListRef]);
-
-  return active;
-}
-
 function Home() {
   const { data: snapshot, refetch } = useSuspenseQuery(snapshotQuery);
   const queryClient = useQueryClient();
-
-  const navListRef = useRef<HTMLUListElement | null>(null);
-  const activeSection = useActiveSection(navListRef);
-
-  /* Only about three of the buttons fit on a phone, so the highlight can end up
-     off-screen. Nudge the nav's own scrollLeft — never the page — and only when
-     the button is actually clipped.
-
-     Deliberately not a smooth scroll: smooth scrolling is driven by the same
-     animation clock that is paused while a page is not being rendered, and a
-     nav that slides sideways under his finger mid-scroll is more distracting
-     than one that simply already shows the right button. */
-  useEffect(() => {
-    const list = navListRef.current;
-    if (!list) return;
-    const link = list.querySelector<HTMLElement>(`a[href="#${activeSection}"]`);
-    if (!link) return;
-    const listBox = list.getBoundingClientRect();
-    const linkBox = link.getBoundingClientRect();
-    if (linkBox.left < listBox.left + 8) {
-      list.scrollBy({ left: linkBox.left - listBox.left - 12 });
-    } else if (linkBox.right > listBox.right - 8) {
-      list.scrollBy({ left: linkBox.right - listBox.right + 12 });
-    }
-  }, [activeSection]);
 
   // ESPN blocks our server's IP, so the browser tops the snapshot up with
   // cups, European and friendly matches after hydration.
@@ -200,51 +116,9 @@ function Home() {
         </h1>
       </header>
 
-      <nav
-        aria-label="Брзи кратенки"
-        className="sticky top-0 z-20 border-b-4 border-primary bg-card/95 backdrop-blur"
-      >
-        <ul
-          ref={navListRef}
-          className="flex gap-2 overflow-x-auto px-3 py-2.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
-        >
-          {navFor(Boolean(snapshot.live)).map((item) => {
-            const current = item.id === activeSection;
-            return (
-              <li key={item.id} className="shrink-0">
-                <a
-                  href={`#${item.id}`}
-                  aria-current={current ? "true" : undefined}
-                  /* A black outline reads clearly against both the grey buttons
-                     and the red one, unlike a fill or colour change. */
-                  className={`block rounded-xl bg-secondary px-4 py-3 text-base font-bold text-secondary-foreground transition-shadow sm:text-lg ${
-                    current ? "ring-[3px] ring-foreground" : "ring-0"
-                  }`}
-                >
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-          <li className="shrink-0">
-            <Link
-              to="/sostav"
-              className="block rounded-xl bg-secondary px-4 py-3 text-base font-bold text-secondary-foreground sm:text-lg"
-            >
-              Играчи
-            </Link>
-          </li>
-          <li className="shrink-0">
-            <Link
-              to="/chat"
-              className="block rounded-xl bg-primary px-4 py-3 text-base font-bold text-primary-foreground sm:text-lg"
-            >
-              Прашај
-            </Link>
-          </li>
-          <HelpCard />
-        </ul>
-      </nav>
+      <div className="sticky top-0 z-20">
+        <TopNav variant="home" isLive={Boolean(snapshot.live)} />
+      </div>
 
       <GreetingCard />
       {snapshot.availability === "stale" ? (

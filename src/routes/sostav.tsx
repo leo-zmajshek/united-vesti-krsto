@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { getSquad } from "@/lib/manutd.functions";
+import { TopNav } from "@/components/united/TopNav";
 import { POSITION_GROUPS_MK, agePhraseMk, countryMk, positionMk } from "@/lib/mk";
 import type { SquadPlayerDTO } from "@/lib/manutd.types";
 
@@ -43,21 +44,26 @@ export const Route = createFileRoute("/sostav")({
 function SquadShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh bg-background pb-10">
-      <header
-        className="sticky top-0 z-20 flex items-center gap-3 px-4 py-3"
-        style={{ background: "var(--gradient-hero)" }}
-      >
-        <Link
-          to="/"
-          className="shrink-0 rounded-xl bg-card px-4 py-3 text-base font-bold text-card-foreground sm:text-lg"
-          aria-label="Назад на почетната страница"
+      {/* Header and shortcuts stick together, so he can see where he is and
+          jump anywhere without scrolling back up. */}
+      <div className="sticky top-0 z-20">
+        <header
+          className="flex items-center gap-3 px-4 py-3"
+          style={{ background: "var(--gradient-hero)" }}
         >
-          ← Назад
-        </Link>
-        <h1 className="min-w-0 text-xl font-black leading-tight text-primary-foreground sm:text-2xl">
-          Играчите на Јунајтед
-        </h1>
-      </header>
+          <Link
+            to="/"
+            className="shrink-0 rounded-xl bg-card px-4 py-3 text-base font-bold text-card-foreground sm:text-lg"
+            aria-label="Назад на почетната страница"
+          >
+            ← Назад
+          </Link>
+          <h1 className="min-w-0 text-xl font-black leading-tight text-primary-foreground sm:text-2xl">
+            Играчите на Јунајтед
+          </h1>
+        </header>
+        <TopNav variant="page" current="squad" />
+      </div>
       <div className="px-4 py-6 sm:px-6">{children}</div>
     </main>
   );

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { askUnited } from "@/lib/manutd.functions";
+import { TopNav } from "@/components/united/TopNav";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/chat")({
       { property: "og:title", content: "Прашај за Манчестер Јунајтед" },
       {
         property: "og:description",
-        content: "Помошник кој одговара на македонски за сè што ве интересира за Манчестер Јунајтед.",
+        content:
+          "Помошник кој одговара на македонски за сè што ве интересира за Манчестер Јунајтед.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -95,27 +97,33 @@ function ChatPage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-background">
-      <header
-        className="sticky top-0 z-20 flex items-center gap-3 px-4 py-3"
-        style={{ background: "var(--gradient-hero)" }}
-      >
-        <Link
-          to="/"
-          className="shrink-0 rounded-xl bg-card px-4 py-3 text-base font-bold text-card-foreground sm:text-lg"
-          aria-label="Назад на почетната страница"
+      {/* Header and shortcuts stick together, so he can see where he is and
+          jump anywhere without scrolling back up. */}
+      <div className="sticky top-0 z-20">
+        <header
+          className="flex items-center gap-3 px-4 py-3"
+          style={{ background: "var(--gradient-hero)" }}
         >
-          ← Назад
-        </Link>
-        <h1 className="min-w-0 text-xl font-black leading-tight text-primary-foreground sm:text-2xl">
-          Прашај за Јунајтед
-        </h1>
-      </header>
+          <Link
+            to="/"
+            className="shrink-0 rounded-xl bg-card px-4 py-3 text-base font-bold text-card-foreground sm:text-lg"
+            aria-label="Назад на почетната страница"
+          >
+            ← Назад
+          </Link>
+          <h1 className="min-w-0 text-xl font-black leading-tight text-primary-foreground sm:text-2xl">
+            Прашај за Јунајтед
+          </h1>
+        </header>
+        <TopNav variant="page" current="chat" />
+      </div>
 
       <div className="flex-1 space-y-4 px-4 py-5">
         {messages.length === 0 ? (
           <div>
             <p className="text-lg leading-relaxed sm:text-xl">
-              Прашајте што сакате за Манчестер Јунајтед. Одговорот доаѓа на македонски, кратко и јасно.
+              Прашајте што сакате за Манчестер Јунајтед. Одговорот доаѓа на македонски, кратко и
+              јасно.
             </p>
             <ul className="mt-4 space-y-3">
               {SUGGESTIONS.map((s) => (
@@ -147,7 +155,9 @@ function ChatPage() {
 
         {loading ? <p className="text-lg text-muted-foreground">Размислувам…</p> : null}
         {error ? (
-          <p className="rounded-2xl bg-destructive px-4 py-3 text-lg text-destructive-foreground">{error}</p>
+          <p className="rounded-2xl bg-destructive px-4 py-3 text-lg text-destructive-foreground">
+            {error}
+          </p>
         ) : null}
         <div ref={bottomRef} />
       </div>
