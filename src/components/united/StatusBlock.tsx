@@ -4,6 +4,8 @@ import { Badge, Card } from "./ui";
 import {
   OUTCOME_LABEL,
   countdown,
+  decidedOnPens,
+  pensMk,
   formatDateTime,
   formatTime,
   hoursUntil,
@@ -25,6 +27,7 @@ function ScoreLine({
   awayBadge,
   homeScore,
   awayScore,
+  pens = "",
 }: {
   home: string;
   away: string;
@@ -32,6 +35,7 @@ function ScoreLine({
   awayBadge: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  pens?: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-2">
@@ -47,6 +51,9 @@ function ScoreLine({
           <span className="mx-1.5 opacity-60 sm:mx-2">:</span>
           {awayScore ?? "-"}
         </div>
+        {pens ? (
+          <div className="mt-1 text-base font-bold text-muted-foreground sm:text-lg">{pens}</div>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col items-center gap-2 text-center">
         <Badge src={awayBadge} alt={away} size={52} />
@@ -62,16 +69,22 @@ function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function goalSide(goalTeam: string, home: string, away: string): "home" | "away" {
+const UNITED_MK = teamMk("Manchester United");
+
+/* One side is always United, so the question is only "United or not". teamMk
+   folds every provider spelling ("Manchester United FC", "Man Utd") onto one
+   name, which makes that test reliable. Matching the opponent by name failed
+   whenever providers spelled it differently, and unmatched goals all landed on
+   the home side. Own goals arrive credited to the team that benefits, so they
+   end up on the right side too. */
+function goalSide(goalTeam: string, match: MatchDTO): "home" | "away" {
+  const unitedSide = match.isHome ? "home" : "away";
+  const otherSide = match.isHome ? "away" : "home";
+  if (goalTeam.trim()) return teamMk(goalTeam) === UNITED_MK ? unitedSide : otherSide;
+  // No team given: fall back to comparing names.
   const g = normalize(goalTeam);
-  const h = normalize(home);
-  const a = normalize(away);
-  if (!g) return "home";
-  if (g === h) return "home";
-  if (g === a) return "away";
-  if (h.includes(g) || g.includes(h)) return "home";
-  if (a.includes(g) || g.includes(a)) return "away";
-  return "home";
+  const a = normalize(match.away);
+  return g && (a.includes(g) || g.includes(a)) ? "away" : "home";
 }
 
 function GoalItem({
@@ -117,10 +130,10 @@ function MatchDetails({ match }: { match: MatchDTO }) {
 
   const sides = match.scorers.map((goal) => ({
     goal,
-    side: goalSide(goal.team, match.home, match.away),
+    side: goalSide(goal.team, match),
   }));
 
-  const homeLineup = match.lineups.find((l) => goalSide(l.team, match.home, match.away) === "home");
+  const homeLineup = match.lineups.find((l) => goalSide(l.team, match) === "home");
   const awayLineup = match.lineups.find((l) => l !== homeLineup);
 
   return (
@@ -191,7 +204,13 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
               <span className="h-3 w-3 animate-pulse rounded-full bg-live-foreground" />
               Во живо
             </span>
-            {live.progress ? <span className="text-2xl font-bold">{live.progress}′</span> : null}
+            {live.phase === "halftime" ? (
+              <span className="text-2xl font-bold">Полувреме</span>
+            ) : live.phase === "penalties" ? (
+              <span className="text-2xl font-bold">Пенали</span>
+            ) : live.progress ? (
+              <span className="text-2xl font-bold">{live.progress}′</span>
+            ) : null}
           </div>
           <ScoreLine
             home={live.home}
@@ -200,6 +219,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             awayBadge={live.awayBadge}
             homeScore={live.homeScore}
             awayScore={live.awayScore}
+            pens={pensMk(live)}
           />
           <p className="mt-4 text-center text-lg text-muted-foreground sm:text-xl">
             {leagueMk(live.league)}
@@ -258,6 +278,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
               awayBadge={last.awayBadge}
               homeScore={last.homeScore}
               awayScore={last.awayScore}
+              pens={pensMk(last)}
             />
           </div>
           {last.outcome ? (
@@ -266,6 +287,7 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
                 className={`inline-block rounded-full px-6 py-2 text-2xl font-black tracking-wide ${OUTCOME_CLASS[last.outcome]}`}
               >
                 {OUTCOME_LABEL[last.outcome]}
+                {decidedOnPens(last) ? " НА ПЕНАЛИ" : ""}
               </span>
             </p>
           ) : null}

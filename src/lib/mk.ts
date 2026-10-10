@@ -113,6 +113,22 @@ export function countdown(ts: string | null): string {
   return `Уште ${mins} минути`;
 }
 
+/** "(5:4 на пенали)" in home:away order, or "" when there was no shootout. */
+export function pensMk(match: { homePens: number | null; awayPens: number | null }): string {
+  if (match.homePens == null || match.awayPens == null) return "";
+  return `(${match.homePens}:${match.awayPens} на пенали)`;
+}
+
+/** True when the shootout, not the score, settled the outcome. */
+export function decidedOnPens(match: {
+  homeScore: number | null;
+  awayScore: number | null;
+  homePens: number | null;
+  awayPens: number | null;
+}): boolean {
+  return match.homePens != null && match.awayPens != null && match.homeScore === match.awayScore;
+}
+
 export const OUTCOME_LABEL = {
   win: "ПОБЕДА",
   draw: "НЕРЕШЕНО",

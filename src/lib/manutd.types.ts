@@ -13,12 +13,23 @@ export type MatchDTO = {
   isHome: boolean;
   opponent: string;
   opponentBadge: string | null;
+  /** Decided by the shootout when level after extra time. */
   outcome: "win" | "draw" | "loss" | null;
+  /** Penalty shootout score, null when there was none. Never included in the
+      homeScore/awayScore above. */
+  homePens: number | null;
+  awayPens: number | null;
   scorers: GoalEventDTO[];
   lineups: TeamLineupDTO[];
 };
 
-export type LiveDTO = MatchDTO & { progress: string; status: string };
+export type LiveDTO = MatchDTO & {
+  /** Match minute, e.g. "67" or "45+2"; empty when unknown. */
+  progress: string;
+  /** Raw provider status, kept for logs and the assistant. */
+  status: string;
+  phase: "playing" | "halftime" | "penalties";
+};
 
 export type GoalEventDTO = {
   player: string;

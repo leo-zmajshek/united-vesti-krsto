@@ -1,6 +1,14 @@
 import type { SnapshotDTO } from "@/lib/manutd.types";
 import { Badge, Card, Section, SectionHeading } from "./ui";
-import { OUTCOME_SHORT, OUTCOME_WORD_MK, formatDateTime, leagueMk, teamMk } from "@/lib/mk";
+import {
+  OUTCOME_SHORT,
+  OUTCOME_WORD_MK,
+  decidedOnPens,
+  formatDateTime,
+  leagueMk,
+  pensMk,
+  teamMk,
+} from "@/lib/mk";
 
 const FORM_CLASS = {
   win: "bg-success text-success-foreground",
@@ -90,7 +98,9 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                 <span className="font-bold text-foreground">{i + 1}*</span>{" "}
                 {m.isHome ? "Дома против " : "Во гости кај "}
                 {teamMk(m.opponent)} — {m.homeScore ?? "-"}:{m.awayScore ?? "-"} (
-                {OUTCOME_WORD_MK[m.outcome!]}){m.league ? ` · ${leagueMk(m.league)}` : ""}
+                {OUTCOME_WORD_MK[m.outcome!]}
+                {decidedOnPens(m) ? ` на пенали ${m.homePens}:${m.awayPens}` : ""})
+                {m.league ? ` · ${leagueMk(m.league)}` : ""}
               </li>
             ))}
           </ul>
@@ -146,6 +156,11 @@ export function ScheduleSection({ snapshot }: { snapshot: SnapshotDTO }) {
                   <p className="text-xl font-black tabular-nums sm:text-2xl">
                     {m.homeScore ?? "-"}:{m.awayScore ?? "-"}
                   </p>
+                  {pensMk(m) ? (
+                    <p className="text-sm text-muted-foreground sm:text-base">
+                      пенали {m.homePens}:{m.awayPens}
+                    </p>
+                  ) : null}
                   {m.outcome ? (
                     <span
                       className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-sm font-bold sm:text-base ${FORM_CLASS[m.outcome]}`}

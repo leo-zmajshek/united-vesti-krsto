@@ -85,6 +85,9 @@ export function mergeMatches(lists: MatchDTO[][]): MatchDTO[] {
         homeBadge: winner.homeBadge ?? other.homeBadge,
         awayBadge: winner.awayBadge ?? other.awayBadge,
         timestamp: winner.timestamp ?? other.timestamp,
+        homePens: winner.homePens ?? other.homePens,
+        awayPens: winner.awayPens ?? other.awayPens,
+        outcome: winner.homePens == null && other.homePens != null ? other.outcome : winner.outcome,
         scorers: winner.scorers.length > 0 ? winner.scorers : other.scorers,
         lineups: winner.lineups.length > 0 ? winner.lineups : other.lineups,
       });
@@ -109,6 +112,26 @@ export function withoutPlayed(fixtures: MatchDTO[], played: (MatchDTO | null)[])
   return fixtures.filter((m) => !done.has(matchKey(m)));
 }
 
+/** United's result, with a level score settled by the shootout when there was one. */
+export function outcomeOf(
+  homeScore: number | null,
+  awayScore: number | null,
+  unitedHome: boolean,
+  homePens: number | null = null,
+  awayPens: number | null = null,
+): MatchDTO["outcome"] {
+  if (homeScore == null || awayScore == null) return null;
+  let home = homeScore;
+  let away = awayScore;
+  if (home === away && homePens != null && awayPens != null) {
+    home = homePens;
+    away = awayPens;
+  }
+  const mine = unitedHome ? home : away;
+  const theirs = unitedHome ? away : home;
+  return mine > theirs ? "win" : mine === theirs ? "draw" : "loss";
+}
+
 /* ---------- ESPN parsing ---------- */
 
 export function parseEspnMatch(event: EspnRecord): MatchDTO | null {
@@ -124,13 +147,11 @@ export function parseEspnMatch(event: EspnRecord): MatchDTO | null {
   const awayName = text(awayTeam["displayName"]);
   const homeScore = numberOrNull(record(home["score"])["value"] ?? home["score"]);
   const awayScore = numberOrNull(record(away["score"])["value"] ?? away["score"]);
+  // The shootout sits beside the score, never inside it.
+  const homePens = numberOrNull(record(home["score"])["shootoutScore"] ?? home["shootoutScore"]);
+  const awayPens = numberOrNull(record(away["score"])["shootoutScore"] ?? away["shootoutScore"]);
   const unitedHome = text(homeTeam["id"]) === ESPN_TEAM_ID || isUnited(homeName);
-  let outcome: MatchDTO["outcome"] = null;
-  if (homeScore != null && awayScore != null) {
-    const mine = unitedHome ? homeScore : awayScore;
-    const theirs = unitedHome ? awayScore : homeScore;
-    outcome = mine > theirs ? "win" : mine === theirs ? "draw" : "loss";
-  }
+  const outcome = outcomeOf(homeScore, awayScore, unitedHome, homePens, awayPens);
   const homeLogo = list(homeTeam["logos"])[0];
   const awayLogo = list(awayTeam["logos"])[0];
   const league = record(event["league"]);
@@ -150,9 +171,29 @@ export function parseEspnMatch(event: EspnRecord): MatchDTO | null {
     opponent: unitedHome ? awayName : homeName,
     opponentBadge: unitedHome ? awayBadge : homeBadge,
     outcome,
+    homePens,
+    awayPens,
     scorers: [],
     lineups: [],
   };
+}
+
+/* ESPN's live minute is in the competition clock ("45'+2'"). The old code
+   stripped digits out of the status text instead, which is "Halftime" at the
+   break and so came out empty. */
+function espnLiveState(competition: EspnRecord): Pick<LiveDTO, "progress" | "status" | "phase"> {
+  const status = record(competition["status"]);
+  const type = record(status["type"]);
+  const name = text(type["name"]).toUpperCase();
+  const detail = text(type["shortDetail"]) || text(type["detail"]);
+  const phase: LiveDTO["phase"] =
+    name.includes("HALFTIME") || /^(HT|half ?time)$/i.test(detail)
+      ? "halftime"
+      : name.includes("SHOOTOUT") || name.includes("PENALT")
+        ? "penalties"
+        : "playing";
+  const clock = text(status["displayClock"]) || detail;
+  return { progress: clock.replace(/[^0-9+]/g, ""), status: detail, phase };
 }
 
 export function parseEspnSchedule(data: unknown): {
@@ -171,11 +212,7 @@ export function parseEspnSchedule(data: unknown): {
     const status = record(record(competition["status"])["type"]);
     const state = text(status["state"]);
     if (state === "in") {
-      live = {
-        ...match,
-        progress: text(status["detail"]).replace(/[^0-9+]/g, ""),
-        status: text(status["detail"]),
-      };
+      live = { ...match, ...espnLiveState(competition) };
     } else if (state === "post") {
       results.push(match);
     } else {
@@ -323,7 +360,14 @@ export async function mergeEspnIntoSnapshot(
 
   return {
     ...snapshot,
-    live: live ? { ...(detailed as LiveDTO), progress: live.progress, status: live.status } : null,
+    live: live
+      ? {
+          ...(detailed as LiveDTO),
+          progress: live.progress,
+          status: live.status,
+          phase: live.phase,
+        }
+      : null,
     last: live ? last : (detailed as MatchDTO | null),
     next: fixtures[0] ?? null,
     fixtures: fixtures.slice(0, 6),

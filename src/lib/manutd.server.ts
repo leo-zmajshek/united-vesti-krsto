@@ -23,7 +23,8 @@ import {
   parseEspnSchedule,
   withoutPlayed,
 } from "./espn-feed";
-import { teamMk, leagueMk } from "./mk";
+import { teamMk, leagueMk, pensMk } from "./mk";
+import { cached, recall, remember, withDeadline } from "./cache.server";
 import { loadPlayerPhotos } from "./photos.server";
 import { loadOfficialSquad } from "./manutd-site.server";
 
@@ -39,47 +40,41 @@ import type {
 
 export type { MatchDTO, LiveDTO, TableRowDTO, NewsItemDTO, SnapshotDTO, SquadDTO };
 
-type CacheEntry = { value: unknown; expires: number };
-const cache = new Map<string, CacheEntry>();
-
-async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
-  const hit = cache.get(key);
-  if (hit && hit.expires > Date.now()) return hit.value as T;
-  try {
-    const value = await load();
-    cache.set(key, { value, expires: Date.now() + ttlMs });
-    return value;
-  } catch (err) {
-    console.error("[manutd] load failed for", key, err);
-    if (hit) return hit.value as T;
-    throw err;
-  }
-}
-
 /* ESPN rejects browser-like clients from datacenter IPs; a plain non-browser
-   agent gets through, so try a few agents before falling back to a text proxy. */
+   agent gets through, so try a few agents before falling back to a text proxy.
+   Every attempt is short and the agents share one budget: with 8s per agent
+   plus a 10s proxy, one blocked ESPN call used to cost up to 34 seconds. */
 const ESPN_AGENTS = ["curl/8.7.1", "okhttp/4.12.0", "ESPN/1.0 (+https://espn.com)"];
+const ATTEMPT_TIMEOUT_MS = 4_000;
+const ESPN_BUDGET_MS = 6_000;
 
 async function getJson<T>(url: string): Promise<T> {
   const isEspn = url.includes("espn.com");
   const agents = isEspn ? ESPN_AGENTS : [null];
-  let lastStatus = 0;
+  const deadline = Date.now() + ESPN_BUDGET_MS;
+  let lastError: unknown = null;
   for (const agent of agents) {
-    const res = await fetch(url, {
-      headers: { accept: "application/json", ...(agent ? { "user-agent": agent } : {}) },
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (res.ok) return (await res.json()) as T;
-    lastStatus = res.status;
+    const remaining = deadline - Date.now();
+    if (remaining < 500) break;
+    try {
+      const res = await fetch(url, {
+        headers: { accept: "application/json", ...(agent ? { "user-agent": agent } : {}) },
+        signal: AbortSignal.timeout(Math.min(ATTEMPT_TIMEOUT_MS, remaining)),
+      });
+      if (res.ok) return (await res.json()) as T;
+      lastError = new Error(`Request failed: ${res.status}`);
+    } catch (error) {
+      lastError = error;
+    }
   }
   if (isEspn) return getJsonViaProxy<T>(url);
-  throw new Error(`Request failed: ${lastStatus}`);
+  throw lastError ?? new Error("Request failed");
 }
 
 async function getJsonViaProxy<T>(url: string): Promise<T> {
   const res = await fetch(`https://r.jina.ai/${url}`, {
     headers: { accept: "application/json", "x-respond-with": "text" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Proxy request failed: ${res.status}`);
   return JSON.parse(await res.text()) as T;
@@ -113,16 +108,27 @@ function toMatch(e: RawEvent): MatchDTO {
     homeScore: hs,
     awayScore: as,
     league: e["strLeague"] ?? "",
-    timestamp:
-      e["strTimestamp"] ??
-      (e["dateEvent"] ? `${e["dateEvent"]}T${e["strTime"] ?? "00:00:00"}` : null),
+    timestamp: sdbTimestamp(e),
     isHome: united,
     opponent: united ? away : home,
     opponentBadge: (united ? e["strAwayTeamBadge"] : e["strHomeTeamBadge"]) ?? null,
     outcome,
+    homePens: null,
+    awayPens: null,
     scorers: [],
     lineups: [],
   };
+}
+
+/* TheSportsDB sends UTC without a zone ("2026-10-10T16:30:00"). Browsers read
+   that as local time, which shifted its kickoffs by two hours in Skopje. */
+function sdbTimestamp(e: RawEvent): string | null {
+  const raw =
+    e["strTimestamp"] ||
+    (e["dateEvent"] ? `${e["dateEvent"]}T${e["strTime"] || "00:00:00"}` : null);
+  if (!raw) return null;
+  const withZone = /(Z|[+-]\d\d:?\d\d)$/.test(raw) ? raw : `${raw}Z`;
+  return Number.isFinite(new Date(withZone).getTime()) ? withZone : null;
 }
 
 type EspnRecord = Record<string, unknown>;
@@ -184,10 +190,16 @@ async function loadLive(): Promise<LiveDTO | null> {
     (e) => isUnited(e["strHomeTeam"]) || isUnited(e["strAwayTeam"]),
   );
   if (!raw) return null;
+  const status = raw["strStatus"] ?? "";
   return {
     ...toMatch(raw),
-    progress: raw["strProgress"] ?? "",
-    status: raw["strStatus"] ?? "",
+    progress: (raw["strProgress"] ?? "").replace(/[^0-9+]/g, ""),
+    status,
+    phase: /^(HT|BT)$/i.test(status)
+      ? "halftime"
+      : /^(PEN|P)$/i.test(status)
+        ? "penalties"
+        : "playing",
   };
 }
 
@@ -579,7 +591,14 @@ ${raw.map((n, i) => `${i + 1}. ${n.title}`).join("\n")}`;
    gateway many seconds, and while it sat inside the snapshot the score, the
    table and everything else waited for it on every uncached load. */
 export async function getNewsData(): Promise<NewsItemDTO[]> {
-  return cached("news", 30 * 60_000, loadNews);
+  // Served stale for up to six hours while a fresh translation runs in the
+  // background, so the AI runs about twice an hour instead of on every visit.
+  const news = await cached("news", 30 * 60_000, loadNews, { swrMs: 6 * 60 * 60_000 });
+  // "пред 2 часа" was computed when the entry was stored; recompute it now.
+  return news.map((n) => ({
+    ...n,
+    published: n.publishedAt ? mkAgo(new Date(n.publishedAt)) : n.published,
+  }));
 }
 
 /* ---------- Squad ---------- */
@@ -664,7 +683,9 @@ async function fillShirtNumbers(squad: SquadDTO): Promise<SquadDTO> {
 }
 
 export async function getSquadData(footballDataApiKey?: string): Promise<SquadDTO> {
-  return cached("squad", 12 * 60 * 60_000, async () => {
+  return cached("squad", 12 * 60 * 60_000, buildSquad, { swrMs: 6 * 24 * 60 * 60_000 });
+
+  async function buildSquad(): Promise<SquadDTO> {
     /* Two kinds of source, each authoritative for different fields.
 
        The club's own page has the real first-team list, the squad numbers and
@@ -730,32 +751,51 @@ export async function getSquadData(footballDataApiKey?: string): Promise<SquadDT
     }
 
     return squad;
-  });
+  }
 }
 
 /* ---------- Snapshot ---------- */
 
 /* matchKey / matchScore / mergeMatches live in ./espn-feed (shared with the browser top-up). */
 
-let lastSuccessfulSnapshot: SnapshotDTO | null = null;
+const LAST_SNAPSHOT_KEY = "last-good-snapshot";
+
+/* The page waits for the snapshot before it renders, so it gets a hard budget.
+   A provider that has not answered by then is left out of this response; its
+   load keeps running in the background and is in the cache for the next one. */
+const SNAPSHOT_BUDGET_MS = 6_000;
+
+type Schedule = { live: LiveDTO | null; results: MatchDTO[]; fixtures: MatchDTO[] };
+const NO_SCHEDULE: Schedule = { live: null, results: [], fixtures: [] };
 
 export async function getSnapshotData(footballDataApiKey?: string): Promise<SnapshotDTO> {
-  const authenticatedMatches = footballDataApiKey
-    ? cached("football-data-matches", 5 * 60_000, () =>
-        loadFootballDataMatches(footballDataApiKey),
-      ).catch((error) => {
-        console.error("[manutd] authenticated match provider failed", error);
-        return { live: null, results: [], fixtures: [] };
-      })
-    : Promise.resolve({ live: null, results: [], fixtures: [] });
-  const authenticatedTable = footballDataApiKey
-    ? cached("football-data-table", 30 * 60_000, () =>
-        loadFootballDataTable(footballDataApiKey),
-      ).catch((error) => {
-        console.error("[manutd] authenticated table provider failed", error);
-        return [] as TableRowDTO[];
-      })
-    : Promise.resolve([] as TableRowDTO[]);
+  const started = Date.now();
+  const deadline = started + SNAPSHOT_BUDGET_MS;
+  const timings: string[] = [];
+
+  /* Each source: cached, never throws, capped by the deadline, and timed so the
+     logs show which provider is slow instead of leaving it to guesswork. */
+  function source<T>(name: string, load: Promise<T>, fallback: T, until = deadline): Promise<T> {
+    let outcome = "ok";
+    const safe = load.catch((error) => {
+      outcome = "failed";
+      console.error(`[manutd] ${name} failed`, error);
+      return fallback;
+    });
+    return withDeadline(
+      safe.then((value) => {
+        timings.push(`${name}=${Date.now() - started}ms${outcome === "ok" ? "" : `(${outcome})`}`);
+        return value;
+      }),
+      until,
+      fallback,
+    ).then((value) => {
+      if (Date.now() >= until && !timings.some((t) => t.startsWith(`${name}=`))) {
+        timings.push(`${name}=timeout`);
+      }
+      return value;
+    });
+  }
 
   const [
     primary,
@@ -766,19 +806,49 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
     primaryTable,
     fallbackTable,
   ] = await Promise.all([
-    authenticatedMatches,
-    cached("espn-schedule", 2 * 60_000, loadEspnSchedule).catch(() => ({
-      live: null,
-      results: [],
-      fixtures: [],
-    })),
-    cached("live", 2 * 60_000, loadLive).catch(() => null),
-    cached("results", 15 * 60_000, loadResults).catch(() => [] as MatchDTO[]),
-    cached("fixtures", 15 * 60_000, loadFixtures).catch(() => [] as MatchDTO[]),
-    authenticatedTable,
-    cached("espn-table", 30 * 60_000, loadEspnTable)
-      .catch(() => cached("table", 30 * 60_000, loadTable))
-      .catch(() => [] as TableRowDTO[]),
+    footballDataApiKey
+      ? source(
+          "football-data",
+          cached("football-data-matches", 2 * 60_000, () =>
+            loadFootballDataMatches(footballDataApiKey),
+          ),
+          NO_SCHEDULE,
+        )
+      : Promise.resolve(NO_SCHEDULE),
+    // Short TTL: this is the feed that reports a live match within seconds.
+    source("espn", cached("espn-schedule", 30_000, loadEspnSchedule), NO_SCHEDULE),
+    source("sdb-live", cached("live", 60_000, loadLive), null),
+    source(
+      "sdb-results",
+      cached("results", 15 * 60_000, loadResults, { swrMs: 60 * 60_000 }),
+      [] as MatchDTO[],
+    ),
+    source(
+      "sdb-fixtures",
+      cached("fixtures", 15 * 60_000, loadFixtures, { swrMs: 60 * 60_000 }),
+      [] as MatchDTO[],
+    ),
+    footballDataApiKey
+      ? source(
+          "football-data-table",
+          cached(
+            "football-data-table",
+            30 * 60_000,
+            () => loadFootballDataTable(footballDataApiKey),
+            {
+              swrMs: 2 * 60 * 60_000,
+            },
+          ),
+          [] as TableRowDTO[],
+        )
+      : Promise.resolve([] as TableRowDTO[]),
+    source(
+      "espn-table",
+      cached("espn-table", 30 * 60_000, loadEspnTable, { swrMs: 2 * 60 * 60_000 }).catch(() =>
+        cached("table", 30 * 60_000, loadTable, { swrMs: 2 * 60 * 60_000 }),
+      ),
+      [] as TableRowDTO[],
+    ),
   ]);
 
   // ESPN first: it updates within seconds, football-data's free tier lags and is
@@ -812,16 +882,26 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
   const last = sortedResults[0] ?? null;
   const focus = live ?? last;
   const espnId = focus ? espnIdFor(focus, [espn.live, ...espn.results, ...espn.fixtures]) : null;
+  // Details get whatever is left of the budget, but at least a moment: scorers
+  // are the point of the live card.
   const details = espnId
-    ? await cached(`match-details-${espnId}`, live ? 45_000 : 6 * 60 * 60_000, () =>
-        loadMatchDetails(espnId),
-      ).catch(() => null)
+    ? await source(
+        "details",
+        cached(`match-details-${espnId}`, live ? 30_000 : 6 * 60 * 60_000, () =>
+          loadMatchDetails(espnId),
+        ),
+        null,
+        Math.max(deadline, Date.now() + 1_500),
+      )
     : null;
   const detailedMatch = focus && details ? { ...focus, ...details } : focus;
 
+  console.log(`[snapshot] ${Date.now() - started}ms ${timings.join(" ")}`);
+
   const hasCoreData = Boolean(live || last || sortedFixtures[0] || table.length > 0);
-  if (!hasCoreData && lastSuccessfulSnapshot) {
-    return { ...lastSuccessfulSnapshot, availability: "stale" };
+  if (!hasCoreData) {
+    const previous = await recall<SnapshotDTO>(LAST_SNAPSHOT_KEY);
+    if (previous) return { ...previous, availability: "stale" };
   }
 
   const snapshot: SnapshotDTO = {
@@ -835,7 +915,7 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
     updatedAt: new Date().toISOString(),
     availability: hasCoreData ? "fresh" : "unavailable",
   };
-  if (hasCoreData) lastSuccessfulSnapshot = snapshot;
+  if (hasCoreData) remember(LAST_SNAPSHOT_KEY, snapshot);
   return snapshot;
 }
 
@@ -908,7 +988,7 @@ export async function answerQuestion(
     const snap = await getSnapshotData(footballDataApiKey);
     const describe = (m: MatchDTO | null) =>
       m
-        ? `${teamMk(m.home)} ${m.homeScore ?? "-"}:${m.awayScore ?? "-"} ${teamMk(m.away)} (${leagueMk(m.league)}, ${m.timestamp ?? "без датум"})`
+        ? `${teamMk(m.home)} ${m.homeScore ?? "-"}:${m.awayScore ?? "-"}${pensMk(m) ? ` ${pensMk(m)}` : ""} ${teamMk(m.away)} (${leagueMk(m.league)}, ${m.timestamp ?? "без датум"})`
         : "нема податок";
     if (snap.live)
       lines.push(

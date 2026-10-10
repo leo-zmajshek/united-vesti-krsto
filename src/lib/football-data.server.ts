@@ -6,6 +6,7 @@ import type {
   SquadPositionDTO,
   TableRowDTO,
 } from "./manutd.types";
+import { outcomeOf } from "./espn-feed";
 
 const BASE_URL = "https://api.football-data.org/v4";
 const UNITED_TEAM_ID = 66;
@@ -48,16 +49,36 @@ function toMatch(raw: JsonRecord): MatchDTO | null {
   const score = record(raw["score"]);
   const fullTime = record(score["fullTime"]);
   const halfTime = record(score["halfTime"]);
-  const homeScore = number(fullTime["home"] ?? halfTime["home"]);
-  const awayScore = number(fullTime["away"] ?? halfTime["away"]);
+  const penalties = record(score["penalties"]);
+  const homePens = number(penalties["home"]);
+  const awayPens = number(penalties["away"]);
+  let homeScore = number(fullTime["home"] ?? halfTime["home"]);
+  let awayScore = number(fullTime["away"] ?? halfTime["away"]);
+  /* After a shootout v4 folds the kicks into fullTime (1-1, 5-4 on pens comes
+     back as 6-5). Rebuild the played score from regular + extra time, or failing
+     that subtract the shootout. */
+  if (homePens !== null && awayPens !== null) {
+    const regular = record(score["regularTime"]);
+    const extra = record(score["extraTime"]);
+    const regularHome = number(regular["home"]);
+    const regularAway = number(regular["away"]);
+    if (regularHome !== null && regularAway !== null) {
+      homeScore = regularHome + (number(extra["home"]) ?? 0);
+      awayScore = regularAway + (number(extra["away"]) ?? 0);
+    } else if (
+      homeScore !== null &&
+      awayScore !== null &&
+      homeScore - homePens === awayScore - awayPens &&
+      homeScore >= homePens &&
+      awayScore >= awayPens
+    ) {
+      homeScore -= homePens;
+      awayScore -= awayPens;
+    }
+  }
   const homeId = number(homeTeam["id"]);
   const unitedHome = homeId === UNITED_TEAM_ID || home.toLowerCase().includes("manchester united");
-  let outcome: MatchDTO["outcome"] = null;
-  if (homeScore !== null && awayScore !== null) {
-    const unitedScore = unitedHome ? homeScore : awayScore;
-    const opponentScore = unitedHome ? awayScore : homeScore;
-    outcome = unitedScore > opponentScore ? "win" : unitedScore === opponentScore ? "draw" : "loss";
-  }
+  const outcome = outcomeOf(homeScore, awayScore, unitedHome, homePens, awayPens);
 
   const competition = record(raw["competition"]);
   return {
@@ -74,6 +95,8 @@ function toMatch(raw: JsonRecord): MatchDTO | null {
     opponent: unitedHome ? away : home,
     opponentBadge: string(unitedHome ? awayTeam["crest"] : homeTeam["crest"]) || null,
     outcome,
+    homePens,
+    awayPens,
     scorers: [],
     lineups: [],
   };
@@ -105,6 +128,12 @@ export async function loadFootballDataMatches(apiKey: string): Promise<{
         ...match,
         progress: minute === null ? "" : String(minute),
         status,
+        phase:
+          status === "PAUSED"
+            ? "halftime"
+            : status === "PENALTY_SHOOTOUT"
+              ? "penalties"
+              : "playing",
       };
     } else if (status === "FINISHED") {
       results.push(match);
