@@ -38,16 +38,18 @@ function isUnited(name: string | null | undefined) {
 
 /* ---------- Merge helpers (shared with the server snapshot) ---------- */
 
-/* Keyed on the canonical Macedonian club name, not the raw string: providers
-   send "Hull City AFC", "Hull City" and "Man Utd" for the same clubs, and
-   comparing raw strings let the same fixture through twice. teamMk collapses
-   every spelling and alias onto one name. */
+/* United never plays twice on one day, so a dated match is keyed on the day
+   alone. Keying on the opponent's name as well let the same fixture through
+   twice whenever providers spelled the club differently — "Atlético Madrid" vs
+   "Club Atlético de Madrid", "Como" vs "Como 1907" — and no alias table keeps up
+   with every European opponent. Undated fixtures still need the opponent, or
+   they would all collapse into one. */
 export function matchKey(match: MatchDTO): string {
   // A malformed timestamp must not throw: one bad date would take down the page.
   const time = match.timestamp ? new Date(match.timestamp).getTime() : NaN;
-  const day = Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : "unknown";
+  if (Number.isFinite(time)) return new Date(time).toISOString().slice(0, 10);
   const opponent = teamMk(match.opponent).trim().toLowerCase().replace(/\s+/g, "");
-  return `${day}|${opponent}`;
+  return `unknown|${opponent}`;
 }
 
 export function matchScore(match: MatchDTO): number {
