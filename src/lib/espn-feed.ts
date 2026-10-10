@@ -43,7 +43,9 @@ function isUnited(name: string | null | undefined) {
    comparing raw strings let the same fixture through twice. teamMk collapses
    every spelling and alias onto one name. */
 export function matchKey(match: MatchDTO): string {
-  const day = match.timestamp ? new Date(match.timestamp).toISOString().slice(0, 10) : "unknown";
+  // A malformed timestamp must not throw: one bad date would take down the page.
+  const time = match.timestamp ? new Date(match.timestamp).getTime() : NaN;
+  const day = Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : "unknown";
   const opponent = teamMk(match.opponent).trim().toLowerCase().replace(/\s+/g, "");
   return `${day}|${opponent}`;
 }
@@ -89,6 +91,22 @@ export function mergeMatches(lists: MatchDTO[][]): MatchDTO[] {
     }
   }
   return [...byKey.values()];
+}
+
+/* ESPN's summary endpoint only understands ESPN event ids. football-data and
+   TheSportsDB ids are numeric too, and asking ESPN for one returns an unrelated
+   match (football-data's 560600 is a 2020 Brazilian youth game), so the id is
+   always resolved through ESPN's own schedule. */
+export function espnIdFor(match: MatchDTO, espnMatches: (MatchDTO | null)[]): string | null {
+  const key = matchKey(match);
+  return espnMatches.find((m) => m && matchKey(m) === key)?.id ?? null;
+}
+
+/** Drop upcoming entries that a provider already reports as live or finished. A
+    lagging feed otherwise kept a finished match as "next" for hours. */
+export function withoutPlayed(fixtures: MatchDTO[], played: (MatchDTO | null)[]): MatchDTO[] {
+  const done = new Set(played.filter((m): m is MatchDTO => m != null).map(matchKey));
+  return fixtures.filter((m) => !done.has(matchKey(m)));
 }
 
 /* ---------- ESPN parsing ---------- */
@@ -176,13 +194,14 @@ export function parseEspnMatchDetails(data: unknown): Pick<MatchDTO, "scorers" |
         .map((detail) => {
           const athlete = record(list(detail["participants"])[0]?.["athlete"]);
           const clock = record(detail["clock"]);
+          // ESPN marks these with booleans; its `text` field is usually null.
           const detailText = text(detail["text"]).toLowerCase();
           return {
             player: text(athlete["displayName"]) || "Непознат стрелец",
             minute: text(clock["displayValue"]) || "—",
             team: text(record(detail["team"])["displayName"]),
-            ownGoal: detailText.includes("own goal"),
-            penalty: detailText.includes("penalty"),
+            ownGoal: detail["ownGoal"] === true || detailText.includes("own goal"),
+            penalty: detail["penaltyKick"] === true || detailText.includes("penalty"),
           };
         })
     : [];
@@ -216,7 +235,26 @@ async function getJson(url: string): Promise<unknown> {
     merge so the caller can hold on to the payload and re-merge instantly when a
     new server snapshot arrives, instead of leaving a gap while it re-fetches. */
 export async function fetchEspnSchedule(): Promise<unknown> {
-  return getJson(`${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`);
+  // The plain schedule lists finished matches only; `fixture=true` is the only
+  // view with upcoming and in-progress ones, so both are needed.
+  const [played, upcoming] = await Promise.all([
+    getJson(espnScheduleUrls[0]),
+    getJson(espnScheduleUrls[1]).catch(() => ({})),
+  ]);
+  return combineEspnSchedules(played, upcoming);
+}
+
+export const espnScheduleUrls = [
+  `${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule`,
+  `${ESPN}/all/teams/${ESPN_TEAM_ID}/schedule?fixture=true`,
+] as const;
+
+export function combineEspnSchedules(...payloads: unknown[]): { events: EspnRecord[] } {
+  const byId = new Map<string, EspnRecord>();
+  for (const payload of payloads) {
+    for (const event of list(record(payload)["events"])) byId.set(text(event["id"]), event);
+  }
+  return { events: [...byId.values()] };
 }
 
 /**
@@ -232,7 +270,12 @@ export async function mergeEspnIntoSnapshot(
   const results = mergeMatches([espn.results, snapshot.results]).sort(
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime(),
   );
-  const merged = mergeMatches([espn.fixtures, snapshot.fixtures]);
+  const live = espn.live ?? snapshot.live;
+  const last = results[0] ?? snapshot.last;
+  const merged = withoutPlayed(mergeMatches([espn.fixtures, snapshot.fixtures]), [
+    live,
+    ...results,
+  ]);
   // Same rule as the server: only genuinely future kickoffs may be "next".
   const KICKOFF_GRACE_MS = 3 * 60 * 60_000;
   const fixtures = merged
@@ -243,17 +286,36 @@ export async function mergeEspnIntoSnapshot(
     })
     .sort((a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime());
 
-  const live = espn.live ?? snapshot.live;
-  const last = results[0] ?? snapshot.last;
   const focus = live ?? last;
 
+  // Start from whatever the server already found for this match, so a failed
+  // browser request can never wipe scorers the server had.
   let detailed = focus;
-  if (focus && focus.scorers.length === 0 && focus.lineups.length === 0 && /^\d+$/.test(focus.id)) {
+  const serverFocus = snapshot.live ?? snapshot.last;
+  if (focus && serverFocus && matchKey(serverFocus) === matchKey(focus)) {
+    detailed = {
+      ...focus,
+      scorers: focus.scorers.length > 0 ? focus.scorers : serverFocus.scorers,
+      lineups: focus.lineups.length > 0 ? focus.lineups : serverFocus.lineups,
+    };
+  }
+  const espnId = focus ? espnIdFor(focus, [espn.live, ...espn.results, ...espn.fixtures]) : null;
+  // During a live match goals keep coming, so always refresh; otherwise only
+  // when nothing is known yet.
+  const needDetails =
+    detailed != null &&
+    (live != null || (detailed.scorers.length === 0 && detailed.lineups.length === 0));
+  if (detailed && espnId && needDetails) {
     try {
       const details = parseEspnMatchDetails(
-        await getJson(`${ESPN}/all/summary?event=${encodeURIComponent(focus.id)}`),
+        await getJson(`${ESPN}/all/summary?event=${encodeURIComponent(espnId)}`),
       );
-      detailed = { ...focus, ...details };
+      detailed = {
+        ...detailed,
+        // Live, ESPN's list is the truth (a goal can be ruled out by VAR).
+        scorers: live || details.scorers.length > 0 ? details.scorers : detailed.scorers,
+        lineups: details.lineups.length > 0 ? details.lineups : detailed.lineups,
+      };
     } catch {
       /* details are optional */
     }

@@ -130,7 +130,7 @@ function Home() {
       <NextMatchSection snapshot={snapshot} />
       <ScheduleSection snapshot={snapshot} />
       <TableSection snapshot={snapshot} />
-      <NewsSection snapshot={snapshot} />
+      <NewsSection />
 
       <div className="px-4 py-6 sm:px-6 sm:py-8">
         <Link

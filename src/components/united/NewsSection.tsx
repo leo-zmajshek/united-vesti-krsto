@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import type { NewsItemDTO, SnapshotDTO } from "@/lib/manutd.types";
+import type { NewsItemDTO } from "@/lib/manutd.types";
 import { Card, Section, SectionHeading, UntranslatedTag } from "./ui";
-import { askAboutNews, expandNews } from "@/lib/manutd.functions";
+import { askAboutNews, expandNews, getNews } from "@/lib/manutd.functions";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -214,15 +215,25 @@ function NewsCard({ item }: { item: NewsItemDTO }) {
   );
 }
 
-export function NewsSection({ snapshot }: { snapshot: SnapshotDTO }) {
+/* Loaded on its own after the page appears, so the score never waits for the
+   news translation. */
+export function NewsSection() {
+  const { data: news, isPending } = useQuery({
+    queryKey: ["united-news"],
+    queryFn: () => getNews(),
+    staleTime: 15 * 60_000,
+    refetchInterval: 30 * 60_000,
+  });
   return (
     <Section>
       <SectionHeading id="news" title="Вести" hint="Најново за клубот." />
       <ul className="mt-5 space-y-4">
-        {snapshot.news.length === 0 ? (
+        {isPending ? (
+          <li className="text-xl text-muted-foreground">Се вчитуваат вестите…</li>
+        ) : !news || news.length === 0 ? (
           <li className="text-xl text-muted-foreground">Моментално нема вести.</li>
         ) : (
-          snapshot.news.map((n) => (
+          news.map((n) => (
             <li key={n.link}>
               <NewsCard item={n} />
             </li>

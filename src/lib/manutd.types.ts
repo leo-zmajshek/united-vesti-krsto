@@ -68,7 +68,6 @@ export type SnapshotDTO = {
   table: TableRowDTO[];
   /** Every row still on zero — the season has not kicked off yet. */
   tableIsPreseason: boolean;
-  news: NewsItemDTO[];
   updatedAt: string;
   availability: "fresh" | "stale" | "unavailable";
 };
