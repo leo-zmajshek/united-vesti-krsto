@@ -28,7 +28,8 @@ export type LiveDTO = MatchDTO & {
   progress: string;
   /** Raw provider status, kept for logs and the assistant. */
   status: string;
-  phase: "playing" | "halftime" | "penalties";
+  /** "break" is the pause before extra time or before the shootout. */
+  phase: "playing" | "halftime" | "break" | "penalties";
 };
 
 export type GoalEventDTO = {

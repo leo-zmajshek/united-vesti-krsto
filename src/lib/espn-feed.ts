@@ -193,7 +193,9 @@ function espnLiveState(competition: EspnRecord): Pick<LiveDTO, "progress" | "sta
       ? "halftime"
       : name.includes("SHOOTOUT") || name.includes("PENALT")
         ? "penalties"
-        : "playing";
+        : name.includes("END_OF") // before extra time or the shootout
+          ? "break"
+          : "playing";
   const clock = text(status["displayClock"]) || detail;
   return { progress: clock.replace(/[^0-9+]/g, ""), status: detail, phase };
 }
@@ -229,7 +231,8 @@ export function parseEspnMatchDetails(data: unknown): Pick<MatchDTO, "scorers" |
   const headerCompetition = list(record(summary["header"])["competitions"])[0];
   const scorers = headerCompetition
     ? list(headerCompetition["details"])
-        .filter((detail) => detail["scoringPlay"] === true)
+        // Shootout kicks can be flagged as scoring plays; they are not goals.
+        .filter((detail) => detail["scoringPlay"] === true && detail["shootout"] !== true)
         .map((detail) => {
           const athlete = record(list(detail["participants"])[0]?.["athlete"]);
           const clock = record(detail["clock"]);
@@ -304,6 +307,7 @@ export function combineEspnSchedules(...payloads: unknown[]): { events: EspnReco
 export async function mergeEspnIntoSnapshot(
   snapshot: SnapshotDTO,
   espn: { live: LiveDTO | null; results: MatchDTO[]; fixtures: MatchDTO[] },
+  { fetchDetails = true }: { fetchDetails?: boolean } = {},
 ): Promise<SnapshotDTO> {
   // ESPN first, matching the server's priority order, so ties resolve the same way.
   const results = mergeMatches([espn.results, snapshot.results]).sort(
@@ -344,7 +348,7 @@ export async function mergeEspnIntoSnapshot(
   const needDetails =
     detailed != null &&
     (live != null || (detailed.scorers.length === 0 && detailed.lineups.length === 0));
-  if (detailed && espnId && needDetails) {
+  if (detailed && espnId && needDetails && fetchDetails) {
     try {
       const details = parseEspnMatchDetails(
         await getJson(`${ESPN}/all/summary?event=${encodeURIComponent(espnId)}`),

@@ -76,9 +76,13 @@ function Home() {
         const { parseEspnSchedule, mergeEspnIntoSnapshot, fetchEspnSchedule } =
           await import("@/lib/espn-feed");
         if (espnCache.current) {
+          // The kept payload is a poll older than the snapshot that just arrived,
+          // so it may fill in lists but must not decide the live match: letting it
+          // do so flicked the score back a goal for a second after every goal.
           const merged = await mergeEspnIntoSnapshot(
             snapshot,
-            parseEspnSchedule(espnCache.current),
+            { ...parseEspnSchedule(espnCache.current), live: null },
+            { fetchDetails: false },
           );
           if (!cancelled) queryClient.setQueryData(snapshotQuery.queryKey, merged);
         }

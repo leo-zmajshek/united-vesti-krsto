@@ -206,6 +206,8 @@ export function StatusBlock({ snapshot }: { snapshot: SnapshotDTO }) {
             </span>
             {live.phase === "halftime" ? (
               <span className="text-2xl font-bold">Полувреме</span>
+            ) : live.phase === "break" ? (
+              <span className="text-2xl font-bold">Пауза</span>
             ) : live.phase === "penalties" ? (
               <span className="text-2xl font-bold">Пенали</span>
             ) : live.progress ? (

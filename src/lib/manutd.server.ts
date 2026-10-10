@@ -18,6 +18,7 @@ import {
   combineEspnSchedules,
   espnIdFor,
   espnScheduleUrls,
+  matchKey,
   mergeMatches,
   parseEspnMatchDetails,
   parseEspnSchedule,
@@ -853,8 +854,15 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
 
   // ESPN first: it updates within seconds, football-data's free tier lags and is
   // cached for five minutes here.
-  const live = espn.live ?? primary.live ?? fallbackLive;
   const results = mergeMatches([espn.results, primary.results, fallbackResults]);
+  /* The lagging providers keep a match "in play" for minutes after the final
+     whistle. Once any provider lists it as finished, their live entry is
+     ignored, or the live card outlives the match with a stale score. */
+  const finished = new Set(results.map(matchKey));
+  const live =
+    espn.live ??
+    [primary.live, fallbackLive].find((m) => m != null && !finished.has(matchKey(m))) ??
+    null;
   const fixtures = withoutPlayed(
     mergeMatches([espn.fixtures, primary.fixtures, fallbackFixtures]),
     [live, ...results],
@@ -887,8 +895,14 @@ export async function getSnapshotData(footballDataApiKey?: string): Promise<Snap
   const details = espnId
     ? await source(
         "details",
-        cached(`match-details-${espnId}`, live ? 30_000 : 6 * 60 * 60_000, () =>
-          loadMatchDetails(espnId),
+        /* Freshness is judged by the TTL at read time, so live and finished
+           details need separate keys: under one key, details saved at 90+4'
+           counted as fresh for six hours after the whistle and a stoppage-time
+           goal went missing. */
+        cached(
+          `match-details-${espnId}-${live ? "live" : "final"}`,
+          live ? 30_000 : 6 * 60 * 60_000,
+          () => loadMatchDetails(espnId),
         ),
         null,
         Math.max(deadline, Date.now() + 1_500),
